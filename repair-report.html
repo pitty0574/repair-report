@@ -476,9 +476,8 @@
       掃描部品 QR Code / Scan Part QR Code
     </button>
     <div id="scanner-container">
-      <video id="scanner-video" playsinline autoplay muted></video>
-      <div id="scanner-overlay"></div>
-      <div class="scanner-hint">將 QR Code 對準框內 / Align QR Code within frame</div>
+      <div id="scanner-video" style="width:100%;"></div>
+      <div class="scanner-hint">將條碼/QR Code 對準框內 / Align barcode or QR Code</div>
     </div>
     <div id="raw-display" style="display:none">
       <div class="raw-code" id="raw-code-text"></div>
@@ -581,14 +580,14 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
 const CONFIG_KEY = 'repair_config';
 
 let scanning = false;
-let codeReader = null;
+let html5QrCode = null;
 let currentRaw = '';
 
 function getTodayStr() {
@@ -726,36 +725,50 @@ function updateParsedFields(data) {
 async function toggleScanner() {
   if (scanning) { stopScanner(); return; }
   try {
-    codeReader = new ZXingLibrary.BrowserMultiFormatReader();
-    const devices = await ZXingLibrary.BrowserMultiFormatReader.listVideoInputDevices();
-    const backCamera = devices.find(d =>
-      /back|rear|environment/i.test(d.label)
-    ) || devices[devices.length - 1];
-    const deviceId = backCamera ? backCamera.deviceId : undefined;
-
+    html5QrCode = new Html5Qrcode('scanner-video');
     document.getElementById('scanner-container').style.display = 'block';
     const btn = document.getElementById('scanBtn');
     btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 停止掃描 / Stop';
     btn.classList.add('scanning');
     scanning = true;
 
-    codeReader.decodeFromVideoDevice(deviceId, 'scanner-video', (result, err) => {
-      if (result) {
-        currentRaw = result.getText();
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      {
+        fps: 15,
+        qrbox: { width: 280, height: 120 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ]
+      },
+      (decodedText) => {
+        currentRaw = decodedText;
         updateParsedFields(parseCode(currentRaw));
         stopScanner();
         showToast('掃描成功！/ Scan successful!', 'success');
         navigator.vibrate && navigator.vibrate(100);
-      }
-    });
+      },
+      () => {}
+    );
   } catch(e) {
+    document.getElementById('scanner-container').style.display = 'none';
     showToast('無法開啟相機 / Camera error: ' + e.message, 'error');
     scanning = false;
   }
 }
 
-function stopScanner() {
-  if (codeReader) { codeReader.reset(); codeReader = null; }
+async function stopScanner() {
+  if (html5QrCode) {
+    try { await html5QrCode.stop(); } catch(e) {}
+    try { html5QrCode.clear(); } catch(e) {}
+    html5QrCode = null;
+  }
   document.getElementById('scanner-container').style.display = 'none';
   const btn = document.getElementById('scanBtn');
   btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg> 掃描部品 QR Code / Scan Part QR Code';
