@@ -583,6 +583,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script>
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
@@ -755,14 +756,36 @@ async function toggleScanner() {
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0);
         let decoded = null;
+
+        // 1. Try native BarcodeDetector (Android Chrome)
         if (detector) {
-          try { const codes = await detector.detect(video); if (codes.length > 0) decoded = codes[0].rawValue; } catch(e) {}
+          try {
+            const codes = await detector.detect(video);
+            if (codes.length > 0) decoded = codes[0].rawValue;
+          } catch(e) {}
         }
+
+        // 2. Try jsQR for QR codes
         if (!decoded && typeof jsQR !== 'undefined') {
           const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const qr = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
           if (qr) decoded = qr.data;
         }
+
+        // 3. Try Quagga2 for barcodes (Code128, EAN etc.)
+        if (!decoded && typeof Quagga !== 'undefined') {
+          await new Promise(resolve => {
+            Quagga.decodeSingle({
+              decoder: { readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader'] },
+              locate: true,
+              src: canvas.toDataURL('image/jpeg', 0.8)
+            }, result => {
+              if (result && result.codeResult) decoded = result.codeResult.code;
+              resolve();
+            });
+          });
+        }
+
         if (decoded) {
           currentRaw = decoded;
           updateParsedFields(parseCode(currentRaw));
