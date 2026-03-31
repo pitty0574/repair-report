@@ -471,16 +471,18 @@
 
   <div class="card">
     <div class="card-title">部品掃描 <span style="font-weight:400;">/ Part Scan</span></div>
-    <button class="scan-btn" id="scanBtn" onclick="toggleScanner()">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg>
-      掃描部品 QR Code / Scan Part QR Code
-    </button>
-    <div id="scanner-container">
-      <video id="scanner-video" playsinline autoplay muted style="width:100%;display:block;"></video>
-      <div id="scanner-overlay"></div>
-      <canvas id="scanner-canvas" style="display:none;"></canvas>
-      <div class="scanner-hint">將條碼對準框內 / Align barcode within frame</div>
-    </div>
+
+    <!-- 主要掃描按鈕：拍照辨識 -->
+    <label for="camera-input" class="scan-btn" id="scanBtn" style="cursor:pointer;margin-bottom:8px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      拍照辨識條碼 / Take Photo to Scan
+    </label>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="handlePhoto(this)">
+
+    <!-- 備用：手動輸入 -->
+    <div style="text-align:center;margin:6px 0 10px;font-size:12px;color:var(--muted);">或手動輸入 / or enter manually</div>
+    <input type="text" id="manual-serial" placeholder="直接輸入生產履歷號碼 / Enter serial number" autocomplete="off" style="text-transform:uppercase;margin-bottom:8px;" oninput="handleManualSerial(this.value)">
+    <!-- scanner removed: using photo capture instead -->
     <div id="raw-display" style="display:none">
       <div class="raw-code" id="raw-code-text"></div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:10px;">已解析 ↓</div>
@@ -583,15 +585,11 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script>
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
 const CONFIG_KEY = 'repair_config';
 
-let scanning = false;
-let videoStream = null;
-let scanLoop = null;
 let currentRaw = '';
 
 function getTodayStr() {
@@ -726,93 +724,65 @@ function updateParsedFields(data) {
   }
 }
 
-async function toggleScanner() {
-  if (scanning) { stopScanner(); return; }
-  const btn = document.getElementById('scanBtn');
-  try {
-    videoStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    const video = document.getElementById('scanner-video');
-    video.srcObject = videoStream;
-    await video.play();
-    document.getElementById('scanner-container').style.display = 'block';
-    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 停止掃描 / Stop';
-    btn.classList.add('scanning');
-    scanning = true;
+let currentRaw = '';
 
-    const hasBD = 'BarcodeDetector' in window;
-    let detector = null;
-    if (hasBD) {
-      try { detector = new BarcodeDetector({ formats: ['qr_code','code_128','code_39','ean_13','ean_8','upc_a','upc_e','data_matrix','pdf417','aztec','itf','codabar'] }); } catch(e) {}
-    }
-    const canvas = document.getElementById('scanner-canvas');
-    const ctx = canvas.getContext('2d');
-
-    async function tick() {
-      if (!scanning) return;
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-        let decoded = null;
-
-        // 1. Try native BarcodeDetector (Android Chrome)
-        if (detector) {
-          try {
-            const codes = await detector.detect(video);
-            if (codes.length > 0) decoded = codes[0].rawValue;
-          } catch(e) {}
-        }
-
-        // 2. Try jsQR for QR codes
-        if (!decoded && typeof jsQR !== 'undefined') {
-          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const qr = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-          if (qr) decoded = qr.data;
-        }
-
-        // 3. Try Quagga2 for barcodes (Code128, EAN etc.)
-        if (!decoded && typeof Quagga !== 'undefined') {
-          await new Promise(resolve => {
-            Quagga.decodeSingle({
-              decoder: { readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader'] },
-              locate: true,
-              src: canvas.toDataURL('image/jpeg', 0.8)
-            }, result => {
-              if (result && result.codeResult) decoded = result.codeResult.code;
-              resolve();
-            });
-          });
-        }
-
-        if (decoded) {
-          currentRaw = decoded;
-          updateParsedFields(parseCode(currentRaw));
-          stopScanner();
-          showToast('掃描成功！/ Scan successful!', 'success');
-          navigator.vibrate && navigator.vibrate(100);
-          return;
-        }
-      }
-      scanLoop = requestAnimationFrame(tick);
-    }
-    scanLoop = requestAnimationFrame(tick);
-  } catch(e) {
-    document.getElementById('scanner-container').style.display = 'none';
-    showToast('請允許相機權限 / Allow camera: ' + e.message, 'error');
-    scanning = false;
+function handleManualSerial(val) {
+  val = val.trim().toUpperCase();
+  if (val.length >= 8) {
+    currentRaw = val;
+    updateParsedFields(parseCode(currentRaw));
+  } else if (val.length === 0) {
+    currentRaw = '';
+    updateParsedFields(null);
   }
 }
 
-function stopScanner() {
-  scanning = false;
-  if (scanLoop) { cancelAnimationFrame(scanLoop); scanLoop = null; }
-  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
-  document.getElementById('scanner-container').style.display = 'none';
-  const btn = document.getElementById('scanBtn');
-  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg> 掃描部品 QR Code / Scan Part QR Code';
-  btn.classList.remove('scanning');
+function handlePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast('辨識中... / Processing...', '');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let decoded = null;
+
+      const angles = [0, 90, 180, 270];
+      for (const deg of angles) {
+        if (deg === 90 || deg === 270) { canvas.width = h; canvas.height = w; }
+        else { canvas.width = w; canvas.height = h; }
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(deg * Math.PI / 180);
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+        ctx.restore();
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const qr = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
+        if (qr && qr.data) { decoded = qr.data; break; }
+      }
+
+      if (decoded) {
+        currentRaw = decoded;
+        document.getElementById('manual-serial').value = decoded;
+        updateParsedFields(parseCode(currentRaw));
+        showToast('掃描成功！/ Scan successful!', 'success');
+        navigator.vibrate && navigator.vibrate(100);
+      } else {
+        showToast('無法辨識，請手動輸入 / Cannot read, enter manually', 'error');
+      }
+      input.value = '';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 async function submitRecord() {
