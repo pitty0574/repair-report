@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>後工程整修日報</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --border: #dddbd3;
+    --accent: #1a1a1a;
+    --accent2: #3d6b4f;
+    --text: #1a1a1a;
+    --muted: #6b6a66;
+    --danger: #b33a2e;
+    --success: #2d6b44;
+    --tag-bg: #e8f0ea;
+    --tag-text: #2d6b44;
+    --input-h: 48px;
+    --radius: 10px;
+  }
+  body {
+    font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 16px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.05em; }
+  header p { font-size: 11px; opacity: 0.55; margin-top: 2px; letter-spacing: 0.08em; }
+  .sync-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #6fcf97;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .sync-dot.offline { background: #f2994a; }
+  .sync-dot.syncing { background: #56ccf2; animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .tabs {
+    display: flex;
+    background: var(--accent);
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    border: none;
+    background: none;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+  .tab.active { color: #fff; border-bottom: 2px solid #6fcf97; }
+
+  .view { display: none; padding: 20px 16px; }
+  .view.active { display: block; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .worker-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+  .worker-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .worker-info { flex: 1; }
+  .worker-id { font-size: 15px; font-weight: 600; }
+  .worker-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .worker-change {
+    font-size: 12px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    margin-top: 14px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"], input[type="number"], input[type="date"] {
+    width: 100%;
+    height: var(--input-h);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    -webkit-appearance: none;
+  }
+  input:focus { border-color: var(--accent2); background: #fff; }
+
+  .parsed-field {
+    display: flex;
+    align-items: center;
+    height: var(--input-h);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 14px;
+    background: #f0f0ec;
+    font-size: 16px;
+    color: var(--text);
+    position: relative;
+  }
+  .parsed-field.empty { color: var(--muted); font-size: 14px; }
+  .parsed-badge {
+    position: absolute;
+    right: 10px;
+    font-size: 10px;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+
+  .raw-code {
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--bg);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    word-break: break-all;
+    margin-bottom: 4px;
+  }
+
+  .scan-btn {
+    width: 100%;
+    height: 56px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .scan-btn.scanning { background: var(--danger); }
+
+  .submit-btn {
+    width: 100%;
+    height: 56px;
+    background: var(--accent2);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .submit-btn:disabled { opacity: 0.4; cursor: default; }
+  .submit-btn .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .submit-btn.loading .spinner { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #scanner-container {
+    display: none;
+    position: relative;
+    width: 100%;
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 12px;
+    background: #000;
+  }
+  #scanner-video { width: 100%; display: block; }
+  #scanner-overlay {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 65%; aspect-ratio: 1;
+    border: 2px solid #6fcf97;
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.4);
+  }
+  .scanner-hint {
+    position: absolute;
+    bottom: 12px; left: 0; right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.8);
+    font-size: 12px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 999;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { background: var(--success); }
+  .toast.error { background: var(--danger); }
+
+  .record-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+  }
+  .record-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .record-num { font-size: 12px; color: var(--muted); }
+  .record-date { font-size: 11px; color: var(--muted); }
+  .record-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .pill {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    font-weight: 500;
+  }
+  .pill.blue { background: #e6f0fb; color: #185fa5; }
+  .pill.amber { background: #faeeda; color: #854f0b; }
+  .pill.gray { background: #f0eeea; color: #5f5e5a; }
+  .pill.pending { background: #faeeda; color: #854f0b; }
+  .pill.synced { background: var(--tag-bg); color: var(--tag-text); }
+  .points-badge { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .points-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .export-btn {
+    width: 100%;
+    height: 48px;
+    background: var(--surface);
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .clear-btn {
+    width: 100%;
+    height: 40px;
+    background: none;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-num { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+  }
+  .empty-state p { font-size: 14px; margin-top: 8px; }
+
+  .setup-warning {
+    background: #fff8ed;
+    border: 1px solid #f0c060;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #7a5800;
+    line-height: 1.6;
+  }
+
+  .modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200;
+    align-items: flex-end;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding: 24px 20px 36px;
+  }
+  .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .modal p { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
+  .modal input {
+    width: 100%;
+    height: 52px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0 16px;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    outline: none;
+    background: var(--bg);
+    margin-bottom: 12px;
+  }
+  .modal input:focus { border-color: var(--accent2); background: #fff; }
+  .modal-confirm {
+    width: 100%;
+    height: 52px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  .config-input {
+    width: 100%;
+    height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 12px;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    font-family: 'SF Mono', monospace;
+    margin-top: 6px;
+  }
+  .save-config-btn {
+    width: 100%;
+    height: 44px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>後工程整修日報</h1>
+  <p><span class="sync-dot" id="sync-dot"></span><span id="sync-status">連線中...</span></p>
+</header>
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('form', this)">填寫日報</button>
+  <button class="tab" onclick="switchTab('history', this)">本機記錄</button>
+  <button class="tab" onclick="switchTab('settings', this)">設定</button>
+</div>
+
+<!-- 填寫日報 -->
+<div id="view-form" class="view active">
+
+  <div id="worker-bar-empty" class="card" style="display:none">
+    <div class="card-title">開始前請登記工號</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">今天第一次使用，請輸入工號，之後每筆自動帶入。</p>
+    <button class="scan-btn" style="background:var(--accent2)" onclick="openWorkerModal()">輸入工號</button>
+  </div>
+
+  <div id="worker-bar" class="worker-bar" style="display:none">
+    <div class="worker-avatar" id="worker-avatar">—</div>
+    <div class="worker-info">
+      <div class="worker-id" id="worker-id-display">—</div>
+      <div class="worker-sub">今日工號 · 明天自動重設</div>
+    </div>
+    <button class="worker-change" onclick="openWorkerModal()">更換</button>
+  </div>
+
+  <div id="setup-warn" class="setup-warning" style="display:none">
+    ⚠️ 尚未設定 Google Sheets 連結，記錄只存本機。請至「設定」頁面填入 Apps Script 網址。
+  </div>
+
+  <div class="card">
+    <div class="card-title">部品掃描</div>
+    <button class="scan-btn" id="scanBtn" onclick="toggleScanner()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg>
+      掃描部品 QR Code
+    </button>
+    <div id="scanner-container">
+      <video id="scanner-video" playsinline autoplay muted></video>
+      <div id="scanner-overlay"></div>
+      <div class="scanner-hint">將 QR Code 對準框內</div>
+    </div>
+    <div id="raw-display" style="display:none">
+      <div class="raw-code" id="raw-code-text"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:10px;">已解析 ↓</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">自動解析資訊</div>
+    <label>車型代碼（第2~3碼）</label>
+    <div class="parsed-field empty" id="field-model">— 請先掃描 QR Code —<span class="parsed-badge">自動</span></div>
+    <label>部件代碼（第4~8碼）</label>
+    <div class="parsed-field empty" id="field-part">— 請先掃描 QR Code —<span class="parsed-badge">自動</span></div>
+    <label>射出日期（後段碼）</label>
+    <div class="parsed-field empty" id="field-prod-date">— 請先掃描 QR Code —<span class="parsed-badge">自動</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">手動填寫</div>
+    <label>顏色代號</label>
+    <input type="text" id="input-color" placeholder="輸入色票編號（供 VLOOKUP 串聯）" autocomplete="off" style="text-transform:uppercase">
+    <label>補漆總點數</label>
+    <input type="number" id="input-points" placeholder="0" inputmode="numeric" min="0">
+    <label>記錄日期</label>
+    <input type="date" id="input-date">
+    <label>備註（選填）</label>
+    <input type="text" id="input-note" placeholder="其他備注">
+    <button class="submit-btn" id="submitBtn" onclick="submitRecord()">
+      <div class="spinner"></div>
+      <span id="submit-label">送出並上傳至 Google Sheets</span>
+    </button>
+  </div>
+</div>
+
+<!-- 本機記錄 -->
+<div id="view-history" class="view">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-count">0</div>
+      <div class="stat-label">今日筆數</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-points">0</div>
+      <div class="stat-label">今日點數</div>
+    </div>
+  </div>
+  <div id="pending-banner" style="display:none;background:#fff8ed;border:1px solid #f0c060;border-radius:var(--radius);padding:12px 16px;margin-bottom:12px;font-size:13px;color:#7a5800;">
+    有 <strong id="pending-count">0</strong> 筆尚未上傳。
+    <button onclick="retryPending()" style="margin-left:8px;font-size:12px;padding:3px 10px;border:1px solid #c08000;border-radius:6px;background:none;color:#7a5800;cursor:pointer;">重試上傳</button>
+  </div>
+  <div id="record-list"></div>
+</div>
+
+<!-- 設定 -->
+<div id="view-settings" class="view">
+  <div class="card">
+    <div class="card-title">Google Apps Script 網址</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:4px;">
+      請將 Apps Script 部署後取得的網址貼入下方。<br>
+      詳細步驟請參考隨附的 <code style="font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px;">apps-script.gs</code> 設定說明。
+    </p>
+    <input type="text" class="config-input" id="config-url" placeholder="https://script.google.com/macros/s/...../exec">
+    <button class="save-config-btn" onclick="saveConfig()">儲存設定</button>
+  </div>
+  <div class="card">
+    <div class="card-title">本機資料管理</div>
+    <button class="export-btn" onclick="exportCSV('today')">匯出今日備份（CSV）</button>
+    <button class="export-btn" onclick="exportCSV('all')">匯出全部備份（CSV）</button>
+    <button class="clear-btn" onclick="clearAll()">清除全部本機記錄</button>
+  </div>
+  <div class="card">
+    <div class="card-title">欄位說明</div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse;">
+      <tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:6px 0;color:var(--muted)">Google Sheets 欄位</th>
+        <th style="text-align:left;padding:6px 0;color:var(--muted)">說明</th>
+      </tr>
+      <tr><td style="padding:5px 0">時間戳記</td><td style="padding:5px 0;color:var(--muted)">自動產生</td></tr>
+      <tr><td style="padding:5px 0">記錄日期</td><td style="padding:5px 0;color:var(--muted)">作業日期</td></tr>
+      <tr><td style="padding:5px 0">工號</td><td style="padding:5px 0;color:var(--muted)">當天登記一次</td></tr>
+      <tr><td style="padding:5px 0">生產履歷號碼</td><td style="padding:5px 0;color:var(--muted)">QR Code 原始碼</td></tr>
+      <tr><td style="padding:5px 0">車型代碼</td><td style="padding:5px 0;color:var(--muted)">第2~3碼</td></tr>
+      <tr><td style="padding:5px 0">部件代碼</td><td style="padding:5px 0;color:var(--muted)">第4~8碼</td></tr>
+      <tr><td style="padding:5px 0">顏色代號</td><td style="padding:5px 0;color:var(--muted)">VLOOKUP 串 PMS</td></tr>
+      <tr><td style="padding:5px 0">補漆總點數</td><td style="padding:5px 0;color:var(--muted)">手動填寫</td></tr>
+      <tr><td style="padding:5px 0">備註</td><td style="padding:5px 0;color:var(--muted)">選填</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- 工號 Modal -->
+<div class="modal-bg" id="worker-modal">
+  <div class="modal">
+    <h3>輸入工號</h3>
+    <p>今天結束前都會自動帶入，<br>明天開啟時會自動重設。</p>
+    <input type="text" id="modal-worker-input" placeholder="工號" inputmode="numeric" autocomplete="off">
+    <button class="modal-confirm" onclick="confirmWorker()">確認</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+const STORAGE_KEY = 'repair_records';
+const WORKER_KEY = 'repair_worker';
+const CONFIG_KEY = 'repair_config';
+
+let scanning = false;
+let videoStream = null;
+let scanInterval = null;
+let currentRaw = '';
+
+function getTodayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function init() {
+  document.getElementById('input-date').value = getTodayStr();
+  loadConfig();
+  checkWorker();
+  checkConnection();
+}
+
+function loadConfig() {
+  const cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+  if (cfg.url) {
+    document.getElementById('config-url').value = cfg.url;
+  }
+  updateSetupWarn();
+}
+
+function saveConfig() {
+  const url = document.getElementById('config-url').value.trim();
+  localStorage.setItem(CONFIG_KEY, JSON.stringify({ url }));
+  updateSetupWarn();
+  checkConnection();
+  showToast('設定已儲存', 'success');
+}
+
+function getConfig() {
+  return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+}
+
+function updateSetupWarn() {
+  const cfg = getConfig();
+  document.getElementById('setup-warn').style.display = cfg.url ? 'none' : 'block';
+}
+
+async function checkConnection() {
+  const cfg = getConfig();
+  const dot = document.getElementById('sync-dot');
+  const status = document.getElementById('sync-status');
+  if (!cfg.url) {
+    dot.className = 'sync-dot offline';
+    status.textContent = '未設定雲端連結';
+    return;
+  }
+  dot.className = 'sync-dot syncing';
+  status.textContent = '檢查連線...';
+  try {
+    const res = await fetch(cfg.url + '?ping=1', { method: 'GET' });
+    if (res.ok) {
+      dot.className = 'sync-dot';
+      status.textContent = 'Google Sheets 已連線';
+    } else throw new Error();
+  } catch {
+    dot.className = 'sync-dot offline';
+    status.textContent = '無法連線，將存本機';
+  }
+}
+
+function checkWorker() {
+  const data = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
+  const today = getTodayStr();
+  if (data.date === today && data.id) {
+    showWorkerBar(data.id);
+  } else {
+    localStorage.removeItem(WORKER_KEY);
+    document.getElementById('worker-bar').style.display = 'none';
+    document.getElementById('worker-bar-empty').style.display = 'block';
+  }
+}
+
+function showWorkerBar(id) {
+  document.getElementById('worker-bar-empty').style.display = 'none';
+  document.getElementById('worker-bar').style.display = 'flex';
+  document.getElementById('worker-id-display').textContent = id;
+  document.getElementById('worker-avatar').textContent = id.slice(-2);
+}
+
+function openWorkerModal() {
+  const data = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
+  document.getElementById('modal-worker-input').value = data.id || '';
+  document.getElementById('worker-modal').classList.add('open');
+  setTimeout(() => document.getElementById('modal-worker-input').focus(), 200);
+}
+
+function confirmWorker() {
+  const id = document.getElementById('modal-worker-input').value.trim();
+  if (!id) { showToast('請輸入工號'); return; }
+  localStorage.setItem(WORKER_KEY, JSON.stringify({ id, date: getTodayStr() }));
+  showWorkerBar(id);
+  document.getElementById('worker-modal').classList.remove('open');
+}
+
+document.getElementById('worker-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+
+function parseCode(code) {
+  if (!code || code.length < 8) return null;
+  return {
+    raw: code,
+    model: code.slice(1, 3),
+    part: code.slice(3, 8),
+    prodDate: code.slice(8)
+  };
+}
+
+function updateParsedFields(data) {
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (val) {
+      el.innerHTML = val + '<span class="parsed-badge">自動</span>';
+      el.classList.remove('empty');
+    } else {
+      el.innerHTML = '— 請先掃描 QR Code —<span class="parsed-badge">自動</span>';
+      el.classList.add('empty');
+    }
+  };
+  if (data) {
+    set('field-model', data.model);
+    set('field-part', data.part);
+    set('field-prod-date', data.prodDate);
+    document.getElementById('raw-display').style.display = 'block';
+    document.getElementById('raw-code-text').textContent = data.raw;
+  } else {
+    set('field-model', null);
+    set('field-part', null);
+    set('field-prod-date', null);
+    document.getElementById('raw-display').style.display = 'none';
+  }
+}
+
+async function toggleScanner() {
+  if (scanning) { stopScanner(); return; }
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const video = document.getElementById('scanner-video');
+    video.srcObject = videoStream;
+    document.getElementById('scanner-container').style.display = 'block';
+    const btn = document.getElementById('scanBtn');
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 停止掃描';
+    btn.classList.add('scanning');
+    scanning = true;
+    scanInterval = setInterval(scanFrame, 200);
+  } catch(e) {
+    showToast('無法開啟相機：' + e.message, 'error');
+  }
+}
+
+function stopScanner() {
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+  clearInterval(scanInterval);
+  document.getElementById('scanner-container').style.display = 'none';
+  const btn = document.getElementById('scanBtn');
+  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg> 掃描部品 QR Code';
+  btn.classList.remove('scanning');
+  scanning = false;
+}
+
+function scanFrame() {
+  const video = document.getElementById('scanner-video');
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height);
+  if (code) {
+    currentRaw = code.data;
+    updateParsedFields(parseCode(currentRaw));
+    stopScanner();
+    showToast('掃描成功！', 'success');
+    navigator.vibrate && navigator.vibrate(100);
+  }
+}
+
+async function submitRecord() {
+  const workerData = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
+  if (!workerData.id) { openWorkerModal(); return; }
+  if (!currentRaw) { showToast('請先掃描 QR Code', 'error'); return; }
+  const points = document.getElementById('input-points').value.trim();
+  if (points === '') { showToast('請填寫補漆點數', 'error'); return; }
+
+  const parsed = parseCode(currentRaw);
+  const record = {
+    id: Date.now(),
+    timestamp: new Date().toISOString(),
+    date: document.getElementById('input-date').value,
+    worker: workerData.id,
+    raw: currentRaw,
+    model: parsed ? parsed.model : '',
+    part: parsed ? parsed.part : '',
+    prodDate: parsed ? parsed.prodDate : '',
+    color: document.getElementById('input-color').value.trim().toUpperCase(),
+    points: parseInt(points),
+    note: document.getElementById('input-note').value.trim(),
+    synced: false
+  };
+
+  saveLocal(record);
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  document.getElementById('submit-label').textContent = '上傳中...';
+
+  const ok = await uploadToSheets(record);
+  if (ok) {
+    markSynced(record.id);
+    showToast('已送出並同步至 Google Sheets！', 'success');
+  } else {
+    showToast('已存本機，稍後會自動重試', 'error');
+  }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  document.getElementById('submit-label').textContent = '送出並上傳至 Google Sheets';
+  resetForm();
+}
+
+async function uploadToSheets(record) {
+  const cfg = getConfig();
+  if (!cfg.url) return false;
+  try {
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(record)
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function retryPending() {
+  const records = getRecords().filter(r => !r.synced);
+  let count = 0;
+  for (const r of records) {
+    const ok = await uploadToSheets(r);
+    if (ok) { markSynced(r.id); count++; }
+  }
+  showToast(count > 0 ? `已上傳 ${count} 筆！` : '上傳失敗，請檢查網路', count > 0 ? 'success' : 'error');
+  renderHistory();
+}
+
+function saveLocal(record) {
+  const records = getRecords();
+  records.unshift(record);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function markSynced(id) {
+  const records = getRecords();
+  const r = records.find(r => r.id === id);
+  if (r) r.synced = true;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+
+function resetForm() {
+  document.getElementById('input-color').value = '';
+  document.getElementById('input-points').value = '';
+  document.getElementById('input-note').value = '';
+  document.getElementById('input-date').value = getTodayStr();
+  currentRaw = '';
+  updateParsedFields(null);
+}
+
+function renderHistory() {
+  const records = getRecords();
+  const today = getTodayStr();
+  const todayRecs = records.filter(r => r.date === today);
+  document.getElementById('stat-count').textContent = todayRecs.length;
+  document.getElementById('stat-points').textContent = todayRecs.reduce((s, r) => s + (r.points || 0), 0);
+
+  const pending = records.filter(r => !r.synced);
+  const banner = document.getElementById('pending-banner');
+  if (pending.length > 0) {
+    banner.style.display = 'block';
+    document.getElementById('pending-count').textContent = pending.length;
+  } else {
+    banner.style.display = 'none';
+  }
+
+  const list = document.getElementById('record-list');
+  if (records.length === 0) {
+    list.innerHTML = '<div class="empty-state"><p>尚無記錄</p></div>';
+    return;
+  }
+  list.innerHTML = records.map(r => `
+    <div class="record-item">
+      <div class="record-header">
+        <span class="record-num">工號 <strong>${r.worker}</strong></span>
+        <span class="record-date">${r.date}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div>
+          <div class="record-row">
+            <span class="pill">${r.model || '—'}</span>
+            <span class="pill blue">${r.part || '—'}</span>
+            ${r.color ? `<span class="pill amber">${r.color}</span>` : ''}
+          </div>
+          <div style="margin-top:6px">
+            <span class="pill ${r.synced ? 'synced' : 'pending'}">${r.synced ? '已同步' : '待上傳'}</span>
+            ${r.note ? `<span class="pill gray" style="margin-left:4px">${r.note}</span>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="points-badge">${r.points}</div>
+          <div class="points-label">點數</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'history') renderHistory();
+}
+
+function exportCSV(mode) {
+  const records = getRecords();
+  const data = mode === 'today' ? records.filter(r => r.date === getTodayStr()) : records;
+  if (data.length === 0) { showToast('沒有資料可匯出'); return; }
+  const headers = ['時間戳記', '記錄日期', '工號', '生產履歷號碼', '車型代碼', '部件代碼', '顏色代號', '補漆總點數', '備註', '同步狀態'];
+  const rows = data.map(r => [r.timestamp, r.date, r.worker, r.raw, r.model, r.part, r.color, r.points, r.note, r.synced ? '已同步' : '待上傳']
+    .map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(','));
+  const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `整修日報_${mode === 'today' ? getTodayStr() : '全部'}.csv`;
+  a.click();
+  showToast('CSV 下載完成！', 'success');
+}
+
+function clearAll() {
+  if (confirm('確定要清除全部本機記錄？')) {
+    localStorage.removeItem(STORAGE_KEY);
+    renderHistory();
+    showToast('已清除');
+  }
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => { t.className = 'toast'; }, 2500);
+}
+
+init();
+</script>
+</body>
+</html>
