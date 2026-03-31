@@ -581,7 +581,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.20.0/zxing.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script>
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
@@ -726,8 +726,8 @@ function updateParsedFields(data) {
 async function toggleScanner() {
   if (scanning) { stopScanner(); return; }
   try {
-    codeReader = new ZXing.BrowserMultiFormatReader();
-    const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+    codeReader = new ZXingLibrary.BrowserMultiFormatReader();
+    const devices = await ZXingLibrary.BrowserMultiFormatReader.listVideoInputDevices();
     const backCamera = devices.find(d =>
       /back|rear|environment/i.test(d.label)
     ) || devices[devices.length - 1];
