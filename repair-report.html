@@ -581,15 +581,14 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.20.0/zxing.min.js"></script>
 <script>
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
 const CONFIG_KEY = 'repair_config';
 
 let scanning = false;
-let videoStream = null;
-let scanInterval = null;
+let codeReader = null;
 let currentRaw = '';
 
 function getTodayStr() {
@@ -727,48 +726,41 @@ function updateParsedFields(data) {
 async function toggleScanner() {
   if (scanning) { stopScanner(); return; }
   try {
-    videoStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    const video = document.getElementById('scanner-video');
-    video.srcObject = videoStream;
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+    const backCamera = devices.find(d =>
+      /back|rear|environment/i.test(d.label)
+    ) || devices[devices.length - 1];
+    const deviceId = backCamera ? backCamera.deviceId : undefined;
+
     document.getElementById('scanner-container').style.display = 'block';
     const btn = document.getElementById('scanBtn');
-    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 停止掃描';
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 停止掃描 / Stop';
     btn.classList.add('scanning');
     scanning = true;
-    scanInterval = setInterval(scanFrame, 200);
+
+    codeReader.decodeFromVideoDevice(deviceId, 'scanner-video', (result, err) => {
+      if (result) {
+        currentRaw = result.getText();
+        updateParsedFields(parseCode(currentRaw));
+        stopScanner();
+        showToast('掃描成功！/ Scan successful!', 'success');
+        navigator.vibrate && navigator.vibrate(100);
+      }
+    });
   } catch(e) {
     showToast('無法開啟相機 / Camera error: ' + e.message, 'error');
+    scanning = false;
   }
 }
 
 function stopScanner() {
-  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
-  clearInterval(scanInterval);
+  if (codeReader) { codeReader.reset(); codeReader = null; }
   document.getElementById('scanner-container').style.display = 'none';
   const btn = document.getElementById('scanBtn');
-  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg> 掃描部品 QR Code';
+  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg> 掃描部品 QR Code / Scan Part QR Code';
   btn.classList.remove('scanning');
   scanning = false;
-}
-
-function scanFrame() {
-  const video = document.getElementById('scanner-video');
-  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-  const code = jsQR(imageData.data, imageData.width, imageData.height);
-  if (code) {
-    currentRaw = code.data;
-    updateParsedFields(parseCode(currentRaw));
-    stopScanner();
-    showToast('掃描成功！/ Scan successful!', 'success');
-    navigator.vibrate && navigator.vibrate(100);
-  }
 }
 
 async function submitRecord() {
