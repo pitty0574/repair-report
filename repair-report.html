@@ -437,47 +437,48 @@
 <body>
 
 <header>
-  <h1>後工程整修日報</h1>
-  <p><span class="sync-dot" id="sync-dot"></span><span id="sync-status">連線中...</span></p>
+  <h1>後工程整修日報 <span style="font-weight:400;opacity:0.7;font-size:12px;">Repair Daily Report</span></h1>
+  <p><span class="sync-dot" id="sync-dot"></span><span id="sync-status">連線中... Connecting...</span></p>
 </header>
 <div class="tabs">
-  <button class="tab active" onclick="switchTab('form', this)">填寫日報</button>
-  <button class="tab" onclick="switchTab('history', this)">本機記錄</button>
-  <button class="tab" onclick="switchTab('settings', this)">設定</button>
+  <button class="tab active" onclick="switchTab('form', this)">填寫日報<br><span style="font-size:10px;opacity:0.7;">Entry</span></button>
+  <button class="tab" onclick="switchTab('history', this)">本機記錄<br><span style="font-size:10px;opacity:0.7;">Records</span></button>
+  <button class="tab" onclick="switchTab('settings', this)">設定<br><span style="font-size:10px;opacity:0.7;">Settings</span></button>
 </div>
 
 <!-- 填寫日報 -->
 <div id="view-form" class="view active">
 
   <div id="worker-bar-empty" class="card" style="display:none">
-    <div class="card-title">開始前請登記工號</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">今天第一次使用，請輸入工號，之後每筆自動帶入。</p>
-    <button class="scan-btn" style="background:var(--accent2)" onclick="openWorkerModal()">輸入工號</button>
+    <div class="card-title">開始前請登記工號 <span style="font-weight:400;">/ Enter Employee ID</span></div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">今天第一次使用，請輸入工號，之後每筆自動帶入。<br><span style="font-size:12px;">First use today — enter your ID once, auto-filled for all entries.</span></p>
+    <button class="scan-btn" style="background:var(--accent2)" onclick="openWorkerModal()">輸入工號 / Enter Employee ID</button>
   </div>
 
   <div id="worker-bar" class="worker-bar" style="display:none">
     <div class="worker-avatar" id="worker-avatar">—</div>
     <div class="worker-info">
       <div class="worker-id" id="worker-id-display">—</div>
-      <div class="worker-sub">今日工號 · 明天自動重設</div>
+      <div class="worker-sub">今日工號 · 明天自動重設 / Today's ID · Resets tomorrow</div>
     </div>
-    <button class="worker-change" onclick="openWorkerModal()">更換</button>
+    <button class="worker-change" onclick="openWorkerModal()">更換 / Change</button>
   </div>
 
   <div id="setup-warn" class="setup-warning" style="display:none">
-    ⚠️ 尚未設定 Google Sheets 連結，記錄只存本機。請至「設定」頁面填入 Apps Script 網址。
+    ⚠️ 尚未設定 Google Sheets 連結，記錄只存本機。請至「設定」頁面填入 Apps Script 網址。<br>
+    <span style="font-size:12px;">Google Sheets not configured. Records saved locally only. Go to Settings to enter the Apps Script URL.</span>
   </div>
 
   <div class="card">
-    <div class="card-title">部品掃描</div>
+    <div class="card-title">部品掃描 <span style="font-weight:400;">/ Part Scan</span></div>
     <button class="scan-btn" id="scanBtn" onclick="toggleScanner()">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M17 14h3M14 17v3M20 17v3M20 20h-3"/></svg>
-      掃描部品 QR Code
+      掃描部品 QR Code / Scan Part QR Code
     </button>
     <div id="scanner-container">
       <video id="scanner-video" playsinline autoplay muted></video>
       <div id="scanner-overlay"></div>
-      <div class="scanner-hint">將 QR Code 對準框內</div>
+      <div class="scanner-hint">將 QR Code 對準框內 / Align QR Code within frame</div>
     </div>
     <div id="raw-display" style="display:none">
       <div class="raw-code" id="raw-code-text"></div>
@@ -486,28 +487,28 @@
   </div>
 
   <div class="card">
-    <div class="card-title">自動解析資訊</div>
-    <label>車型代碼（第2~3碼）</label>
-    <div class="parsed-field empty" id="field-model">— 請先掃描 QR Code —<span class="parsed-badge">自動</span></div>
-    <label>部件代碼（第4~8碼）</label>
-    <div class="parsed-field empty" id="field-part">— 請先掃描 QR Code —<span class="parsed-badge">自動</span></div>
-    <label>射出日期（後段碼）</label>
-    <div class="parsed-field empty" id="field-prod-date">— 請先掃描 QR Code —<span class="parsed-badge">自動</span></div>
+    <div class="card-title">自動解析資訊 <span style="font-weight:400;">/ Auto-parsed Info</span></div>
+    <label>車型代碼（第2~3碼）/ Vehicle Model Code (digit 2–3)</label>
+    <div class="parsed-field empty" id="field-model">— 請先掃描 QR Code / Scan QR Code first —<span class="parsed-badge">自動 Auto</span></div>
+    <label>部件代碼（第4~8碼）/ Part Code (digit 4–8)</label>
+    <div class="parsed-field empty" id="field-part">— 請先掃描 QR Code / Scan QR Code first —<span class="parsed-badge">自動 Auto</span></div>
+    <label>射出日期（後段碼）/ Production Date (trailing digits)</label>
+    <div class="parsed-field empty" id="field-prod-date">— 請先掃描 QR Code / Scan QR Code first —<span class="parsed-badge">自動 Auto</span></div>
   </div>
 
   <div class="card">
-    <div class="card-title">手動填寫</div>
-    <label>顏色代號</label>
-    <input type="text" id="input-color" placeholder="輸入色票編號（供 VLOOKUP 串聯）" autocomplete="off" style="text-transform:uppercase">
-    <label>補漆總點數</label>
+    <div class="card-title">手動填寫 <span style="font-weight:400;">/ Manual Entry</span></div>
+    <label>顏色代號 / Color Code</label>
+    <input type="text" id="input-color" placeholder="輸入色票編號 / Enter color code" autocomplete="off" style="text-transform:uppercase">
+    <label>補漆總點數 / Total Repair Points</label>
     <input type="number" id="input-points" placeholder="0" inputmode="numeric" min="0">
-    <label>記錄日期</label>
+    <label>記錄日期 / Record Date</label>
     <input type="date" id="input-date">
-    <label>備註（選填）</label>
-    <input type="text" id="input-note" placeholder="其他備注">
+    <label>備註（選填）/ Remarks (optional)</label>
+    <input type="text" id="input-note" placeholder="其他備注 / Additional notes">
     <button class="submit-btn" id="submitBtn" onclick="submitRecord()">
       <div class="spinner"></div>
-      <span id="submit-label">送出並上傳至 Google Sheets</span>
+      <span id="submit-label">送出並上傳至 Google Sheets / Submit & Sync</span>
     </button>
   </div>
 </div>
@@ -517,16 +518,16 @@
   <div class="stats-grid">
     <div class="stat-card">
       <div class="stat-num" id="stat-count">0</div>
-      <div class="stat-label">今日筆數</div>
+      <div class="stat-label">今日筆數 / Today's Entries</div>
     </div>
     <div class="stat-card">
       <div class="stat-num" id="stat-points">0</div>
-      <div class="stat-label">今日點數</div>
+      <div class="stat-label">今日點數 / Today's Points</div>
     </div>
   </div>
   <div id="pending-banner" style="display:none;background:#fff8ed;border:1px solid #f0c060;border-radius:var(--radius);padding:12px 16px;margin-bottom:12px;font-size:13px;color:#7a5800;">
-    有 <strong id="pending-count">0</strong> 筆尚未上傳。
-    <button onclick="retryPending()" style="margin-left:8px;font-size:12px;padding:3px 10px;border:1px solid #c08000;border-radius:6px;background:none;color:#7a5800;cursor:pointer;">重試上傳</button>
+    有 <strong id="pending-count">0</strong> 筆尚未上傳 / records pending upload.
+    <button onclick="retryPending()" style="margin-left:8px;font-size:12px;padding:3px 10px;border:1px solid #c08000;border-radius:6px;background:none;color:#7a5800;cursor:pointer;">重試上傳 / Retry</button>
   </div>
   <div id="record-list"></div>
 </div>
@@ -534,36 +535,36 @@
 <!-- 設定 -->
 <div id="view-settings" class="view">
   <div class="card">
-    <div class="card-title">Google Apps Script 網址</div>
+    <div class="card-title">Google Apps Script 網址 <span style="font-weight:400;">/ URL</span></div>
     <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:4px;">
       請將 Apps Script 部署後取得的網址貼入下方。<br>
-      詳細步驟請參考隨附的 <code style="font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px;">apps-script.gs</code> 設定說明。
+      <span style="font-size:12px;">Paste the deployed Apps Script URL below.</span>
     </p>
     <input type="text" class="config-input" id="config-url" placeholder="https://script.google.com/macros/s/...../exec">
-    <button class="save-config-btn" onclick="saveConfig()">儲存設定</button>
+    <button class="save-config-btn" onclick="saveConfig()">儲存設定 / Save Settings</button>
   </div>
   <div class="card">
-    <div class="card-title">本機資料管理</div>
-    <button class="export-btn" onclick="exportCSV('today')">匯出今日備份（CSV）</button>
-    <button class="export-btn" onclick="exportCSV('all')">匯出全部備份（CSV）</button>
-    <button class="clear-btn" onclick="clearAll()">清除全部本機記錄</button>
+    <div class="card-title">本機資料管理 <span style="font-weight:400;">/ Local Data</span></div>
+    <button class="export-btn" onclick="exportCSV('today')">匯出今日備份 / Export Today (CSV)</button>
+    <button class="export-btn" onclick="exportCSV('all')">匯出全部備份 / Export All (CSV)</button>
+    <button class="clear-btn" onclick="clearAll()">清除全部本機記錄 / Clear All Local Records</button>
   </div>
   <div class="card">
-    <div class="card-title">欄位說明</div>
+    <div class="card-title">欄位說明 <span style="font-weight:400;">/ Column Reference</span></div>
     <table style="width:100%;font-size:12px;border-collapse:collapse;">
       <tr style="border-bottom:1px solid var(--border)">
-        <th style="text-align:left;padding:6px 0;color:var(--muted)">Google Sheets 欄位</th>
-        <th style="text-align:left;padding:6px 0;color:var(--muted)">說明</th>
+        <th style="text-align:left;padding:6px 0;color:var(--muted)">Google Sheets 欄位 / Column</th>
+        <th style="text-align:left;padding:6px 0;color:var(--muted)">說明 / Notes</th>
       </tr>
-      <tr><td style="padding:5px 0">時間戳記</td><td style="padding:5px 0;color:var(--muted)">自動產生</td></tr>
-      <tr><td style="padding:5px 0">記錄日期</td><td style="padding:5px 0;color:var(--muted)">作業日期</td></tr>
-      <tr><td style="padding:5px 0">工號</td><td style="padding:5px 0;color:var(--muted)">當天登記一次</td></tr>
-      <tr><td style="padding:5px 0">生產履歷號碼</td><td style="padding:5px 0;color:var(--muted)">QR Code 原始碼</td></tr>
-      <tr><td style="padding:5px 0">車型代碼</td><td style="padding:5px 0;color:var(--muted)">第2~3碼</td></tr>
-      <tr><td style="padding:5px 0">部件代碼</td><td style="padding:5px 0;color:var(--muted)">第4~8碼</td></tr>
-      <tr><td style="padding:5px 0">顏色代號</td><td style="padding:5px 0;color:var(--muted)">VLOOKUP 串 PMS</td></tr>
-      <tr><td style="padding:5px 0">補漆總點數</td><td style="padding:5px 0;color:var(--muted)">手動填寫</td></tr>
-      <tr><td style="padding:5px 0">備註</td><td style="padding:5px 0;color:var(--muted)">選填</td></tr>
+      <tr><td style="padding:5px 0">時間戳記 / Timestamp</td><td style="padding:5px 0;color:var(--muted)">自動產生 / Auto-generated</td></tr>
+      <tr><td style="padding:5px 0">記錄日期 / Date</td><td style="padding:5px 0;color:var(--muted)">作業日期 / Work date</td></tr>
+      <tr><td style="padding:5px 0">工號 / Employee ID</td><td style="padding:5px 0;color:var(--muted)">當天登記一次 / Set once per day</td></tr>
+      <tr><td style="padding:5px 0">生產履歷號碼 / Serial No.</td><td style="padding:5px 0;color:var(--muted)">QR Code 原始碼 / Raw QR data</td></tr>
+      <tr><td style="padding:5px 0">車型代碼 / Model Code</td><td style="padding:5px 0;color:var(--muted)">第2~3碼 / Digit 2–3</td></tr>
+      <tr><td style="padding:5px 0">部件代碼 / Part Code</td><td style="padding:5px 0;color:var(--muted)">第4~8碼 / Digit 4–8</td></tr>
+      <tr><td style="padding:5px 0">顏色代號 / Color Code</td><td style="padding:5px 0;color:var(--muted)">VLOOKUP 串 PMS</td></tr>
+      <tr><td style="padding:5px 0">補漆總點數 / Repair Points</td><td style="padding:5px 0;color:var(--muted)">手動填寫 / Manual entry</td></tr>
+      <tr><td style="padding:5px 0">備註 / Remarks</td><td style="padding:5px 0;color:var(--muted)">選填 / Optional</td></tr>
     </table>
   </div>
 </div>
@@ -571,10 +572,10 @@
 <!-- 工號 Modal -->
 <div class="modal-bg" id="worker-modal">
   <div class="modal">
-    <h3>輸入工號</h3>
-    <p>今天結束前都會自動帶入，<br>明天開啟時會自動重設。</p>
-    <input type="text" id="modal-worker-input" placeholder="工號" inputmode="numeric" autocomplete="off">
-    <button class="modal-confirm" onclick="confirmWorker()">確認</button>
+    <h3>輸入工號 / Enter Employee ID</h3>
+    <p>今天結束前都會自動帶入，<br>明天開啟時會自動重設。<br><span style="font-size:12px;">Auto-filled for today. Resets tomorrow.</span></p>
+    <input type="text" id="modal-worker-input" placeholder="工號 / Employee ID" inputmode="numeric" autocomplete="off">
+    <button class="modal-confirm" onclick="confirmWorker()">確認 / Confirm</button>
   </div>
 </div>
 
@@ -615,7 +616,7 @@ function saveConfig() {
   localStorage.setItem(CONFIG_KEY, JSON.stringify({ url }));
   updateSetupWarn();
   checkConnection();
-  showToast('設定已儲存', 'success');
+  showToast('設定已儲存 / Settings saved', 'success');
 }
 
 function getConfig() {
@@ -633,20 +634,20 @@ async function checkConnection() {
   const status = document.getElementById('sync-status');
   if (!cfg.url) {
     dot.className = 'sync-dot offline';
-    status.textContent = '未設定雲端連結';
+    status.textContent = '未設定雲端連結 / Cloud not configured';
     return;
   }
   dot.className = 'sync-dot syncing';
-  status.textContent = '檢查連線...';
+  status.textContent = '檢查連線... / Checking...';
   try {
     const res = await fetch(cfg.url + '?ping=1', { method: 'GET' });
     if (res.ok) {
       dot.className = 'sync-dot';
-      status.textContent = 'Google Sheets 已連線';
+      status.textContent = 'Google Sheets 已連線 / Connected';
     } else throw new Error();
   } catch {
     dot.className = 'sync-dot offline';
-    status.textContent = '無法連線，將存本機';
+    status.textContent = '無法連線，將存本機 / Offline — saved locally';
   }
 }
 
@@ -678,7 +679,7 @@ function openWorkerModal() {
 
 function confirmWorker() {
   const id = document.getElementById('modal-worker-input').value.trim();
-  if (!id) { showToast('請輸入工號'); return; }
+  if (!id) { showToast('請輸入工號 / Enter Employee ID'); return; }
   localStorage.setItem(WORKER_KEY, JSON.stringify({ id, date: getTodayStr() }));
   showWorkerBar(id);
   document.getElementById('worker-modal').classList.remove('open');
@@ -738,7 +739,7 @@ async function toggleScanner() {
     scanning = true;
     scanInterval = setInterval(scanFrame, 200);
   } catch(e) {
-    showToast('無法開啟相機：' + e.message, 'error');
+    showToast('無法開啟相機 / Camera error: ' + e.message, 'error');
   }
 }
 
@@ -765,7 +766,7 @@ function scanFrame() {
     currentRaw = code.data;
     updateParsedFields(parseCode(currentRaw));
     stopScanner();
-    showToast('掃描成功！', 'success');
+    showToast('掃描成功！/ Scan successful!', 'success');
     navigator.vibrate && navigator.vibrate(100);
   }
 }
@@ -773,9 +774,9 @@ function scanFrame() {
 async function submitRecord() {
   const workerData = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
   if (!workerData.id) { openWorkerModal(); return; }
-  if (!currentRaw) { showToast('請先掃描 QR Code', 'error'); return; }
+  if (!currentRaw) { showToast('請先掃描 QR Code / Scan QR Code first', 'error'); return; }
   const points = document.getElementById('input-points').value.trim();
-  if (points === '') { showToast('請填寫補漆點數', 'error'); return; }
+  if (points === '') { showToast('請填寫補漆點數 / Enter repair points', 'error'); return; }
 
   const parsed = parseCode(currentRaw);
   const record = {
@@ -798,19 +799,19 @@ async function submitRecord() {
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.classList.add('loading');
-  document.getElementById('submit-label').textContent = '上傳中...';
+  document.getElementById('submit-label').textContent = '上傳中... / Uploading...';
 
   const ok = await uploadToSheets(record);
   if (ok) {
     markSynced(record.id);
-    showToast('已送出並同步至 Google Sheets！', 'success');
+    showToast('已送出並同步至 Google Sheets！/ Synced!', 'success');
   } else {
-    showToast('已存本機，稍後會自動重試', 'error');
+    showToast('已存本機，稍後重試 / Saved locally, will retry', 'error');
   }
 
   btn.disabled = false;
   btn.classList.remove('loading');
-  document.getElementById('submit-label').textContent = '送出並上傳至 Google Sheets';
+  document.getElementById('submit-label').textContent = '送出並上傳至 Google Sheets / Submit & Sync';
   resetForm();
 }
 
@@ -834,7 +835,7 @@ async function retryPending() {
     const ok = await uploadToSheets(r);
     if (ok) { markSynced(r.id); count++; }
   }
-  showToast(count > 0 ? `已上傳 ${count} 筆！` : '上傳失敗，請檢查網路', count > 0 ? 'success' : 'error');
+  showToast(count > 0 ? `已上傳 ${count} 筆 / ${count} records synced!` : '上傳失敗，請檢查網路 / Upload failed, check connection', count > 0 ? 'success' : 'error');
   renderHistory();
 }
 
@@ -882,7 +883,7 @@ function renderHistory() {
 
   const list = document.getElementById('record-list');
   if (records.length === 0) {
-    list.innerHTML = '<div class="empty-state"><p>尚無記錄</p></div>';
+    list.innerHTML = '<div class="empty-state"><p>尚無記錄 / No records yet</p></div>';
     return;
   }
   list.innerHTML = records.map(r => `
@@ -899,13 +900,13 @@ function renderHistory() {
             ${r.color ? `<span class="pill amber">${r.color}</span>` : ''}
           </div>
           <div style="margin-top:6px">
-            <span class="pill ${r.synced ? 'synced' : 'pending'}">${r.synced ? '已同步' : '待上傳'}</span>
+            <span class="pill ${r.synced ? 'synced' : 'pending'}">${r.synced ? '已同步 Synced' : '待上傳 Pending'}</span>
             ${r.note ? `<span class="pill gray" style="margin-left:4px">${r.note}</span>` : ''}
           </div>
         </div>
         <div style="text-align:right">
           <div class="points-badge">${r.points}</div>
-          <div class="points-label">點數</div>
+          <div class="points-label">點數 / Points</div>
         </div>
       </div>
     </div>
@@ -923,7 +924,7 @@ function switchTab(name, el) {
 function exportCSV(mode) {
   const records = getRecords();
   const data = mode === 'today' ? records.filter(r => r.date === getTodayStr()) : records;
-  if (data.length === 0) { showToast('沒有資料可匯出'); return; }
+  if (data.length === 0) { showToast('沒有資料可匯出 / No data to export'); return; }
   const headers = ['時間戳記', '記錄日期', '工號', '生產履歷號碼', '車型代碼', '部件代碼', '顏色代號', '補漆總點數', '備註', '同步狀態'];
   const rows = data.map(r => [r.timestamp, r.date, r.worker, r.raw, r.model, r.part, r.color, r.points, r.note, r.synced ? '已同步' : '待上傳']
     .map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(','));
@@ -932,14 +933,14 @@ function exportCSV(mode) {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = `整修日報_${mode === 'today' ? getTodayStr() : '全部'}.csv`;
   a.click();
-  showToast('CSV 下載完成！', 'success');
+  showToast('CSV 下載完成 / Downloaded!', 'success');
 }
 
 function clearAll() {
-  if (confirm('確定要清除全部本機記錄？')) {
+  if (confirm('確定要清除全部本機記錄？\nClear all local records? This cannot be undone.')) {
     localStorage.removeItem(STORAGE_KEY);
     renderHistory();
-    showToast('已清除');
+    showToast('已清除 / Cleared');
   }
 }
 
