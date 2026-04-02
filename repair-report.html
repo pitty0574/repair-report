@@ -613,6 +613,7 @@
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
 const CONFIG_KEY = 'repair_config';
+const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbwVUeAGF_tUtB-fsRGRzGcCL1TWHq9rsjr4eeyGVTJF8i6eZqOMeBQ12dSzEyO90m7wew/exec';
 
 function promptAdminAccess(el) {
   const pw = prompt('請輸入管理員密碼 / Enter admin password:');
@@ -651,7 +652,9 @@ function saveConfig() {
 }
 
 function getConfig() {
-  return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+  const cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+  if (!cfg.url) cfg.url = HARDCODED_URL;
+  return cfg;
 }
 
 function updateSetupWarn() {
