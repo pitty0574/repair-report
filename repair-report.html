@@ -492,15 +492,14 @@
       <div class="worker-id" id="worker-id-display">—</div>
       <div class="worker-sub">今日工號 · 明天自動重設 / Today's ID · Resets tomorrow</div>
     </div>
-    <button class="worker-change" onclick="openWorkerModal()">更換 / Change</button>
   </div>
 
-  <div style="background:#fff8ed;border:1px solid #f0c060;border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7a5800;line-height:1.7;display:flex;gap:10px;align-items:flex-start;">
-    <span style="font-size:16px;flex-shrink:0;">👤</span>
-    <span>
-      <strong>換人操作前請先更換工號</strong>，點右上角「更換」按鈕即可。<br>
-      <span style="font-size:11px;">If a different person is using this device, tap <strong>"Change"</strong> to update the employee ID before submitting.</span>
-    </span>
+  <div style="background:#fff8ed;border:1px solid #f0c060;border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;font-size:13px;color:#7a5800;line-height:1.7;">
+    👤 <strong>換人使用前請點下方按鈕更換工號</strong><br>
+    <span style="font-size:11px;">Different person using this device? Update the employee ID below first.</span>
+    <button onclick="openWorkerModal()" style="display:block;width:100%;margin-top:8px;height:40px;background:#7a5800;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+      更換工號 / Change Employee ID
+    </button>
   </div>
 
   <div id="setup-warn" class="setup-warning" style="display:none">
@@ -512,15 +511,7 @@
     <div class="card-title">部品資訊 <span style="font-weight:400;">/ Part Info</span></div>
 
     <label>車型 / Vehicle Model</label>
-    <div style="position:relative;">
-      <select id="input-model" style="width:100%;height:var(--input-h);border:1px solid var(--border);border-radius:8px;padding:0 14px;font-size:16px;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none;" onchange="onModelChange(this.value)">
-        <option value="">— 選擇車型 / Select model —</option>
-        <option value="AQ">AQ</option>
-        <option value="OTHER">其他 / Other</option>
-      </select>
-      <svg style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-    </div>
-    <input type="text" id="input-model-other" placeholder="請輸入車型 / Enter model" autocomplete="off" style="display:none;margin-top:8px;text-transform:uppercase;">
+    <input type="text" id="input-model" placeholder="輸入車型代號 / Enter model code" autocomplete="off" style="text-transform:uppercase;" oninput="saveMemory('model', this.value.toUpperCase())">
 
     <label>種類 / Part Type</label>
     <div style="display:flex;gap:8px;margin-bottom:4px;">
@@ -541,8 +532,6 @@
     <div class="card-title">補漆記錄 <span style="font-weight:400;">/ Repair Entry</span></div>
     <label>補漆總點數 / Total Repair Points</label>
     <input type="number" id="input-points" placeholder="0" inputmode="numeric" min="0">
-    <label>記錄日期 / Record Date</label>
-    <input type="date" id="input-date">
     <label>備註（選填）/ Remarks (optional)</label>
     <input type="text" id="input-note" placeholder="其他備注 / Additional notes">
     <button class="submit-btn" id="submitBtn" onclick="submitRecord()">
@@ -633,7 +622,6 @@ function getTodayStr() {
 }
 
 function init() {
-  document.getElementById('input-date').value = getTodayStr();
   loadConfig();
   checkWorker();
   checkConnection();
@@ -786,23 +774,9 @@ function saveMemory(key, value) {
 
 function loadMemoryToForm() {
   const m = getMemory();
-  // Restore model
-  if (m.model) {
-    const sel = document.getElementById('input-model');
-    if ([...sel.options].some(o => o.value === m.model)) {
-      sel.value = m.model;
-    } else {
-      sel.value = 'OTHER';
-      document.getElementById('input-model-other').style.display = 'block';
-      document.getElementById('input-model-other').value = m.model;
-    }
-  }
-  // Restore part
+  if (m.model) document.getElementById('input-model').value = m.model;
   if (m.part) selectPart(m.part, false);
-  // Restore color
-  if (m.lastColor) {
-    document.getElementById('input-color').value = m.lastColor;
-  }
+  if (m.lastColor) document.getElementById('input-color').value = m.lastColor;
 }
 
 function onModelChange(val) {
@@ -859,27 +833,23 @@ async function submitRecord() {
   const workerData = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
   if (!workerData.id) { openWorkerModal(); return; }
 
-  // Get model
-  const modelSel = document.getElementById('input-model').value;
-  const model = modelSel === 'OTHER'
-    ? document.getElementById('input-model-other').value.trim().toUpperCase()
-    : modelSel;
-  if (!model) { showToast('請選擇車型 / Select vehicle model', 'error'); return; }
+  const model = document.getElementById('input-model').value.trim().toUpperCase();
+  if (!model) { showToast('請輸入車型 / Enter vehicle model', 'error'); return; }
   if (!selectedPart) { showToast('請選擇種類 / Select part type', 'error'); return; }
 
   const color = document.getElementById('input-color').value.trim().toUpperCase();
   const points = document.getElementById('input-points').value.trim();
   if (points === '') { showToast('請填寫補漆點數 / Enter repair points', 'error'); return; }
 
-  // Save to memory
-  saveMemory('model', modelSel === 'OTHER' ? model : modelSel);
+  saveMemory('model', model);
   saveMemory('part', selectedPart);
   if (color) { saveMemory('colors', color); saveMemory('lastColor', color); }
 
+  const now = new Date();
   const record = {
     id: Date.now(),
-    timestamp: new Date().toISOString(),
-    date: document.getElementById('input-date').value,
+    timestamp: now.toISOString(),
+    date: now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }),
     worker: workerData.id,
     raw: '',
     model,
@@ -954,11 +924,8 @@ function getRecords() {
 }
 
 function resetForm() {
-  // Keep model, part, color from memory — only clear points and note
   document.getElementById('input-points').value = '';
   document.getElementById('input-note').value = '';
-  document.getElementById('input-date').value = getTodayStr();
-  // Restore last color from memory
   const m = getMemory();
   if (m.lastColor) document.getElementById('input-color').value = m.lastColor;
 }
