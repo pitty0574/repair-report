@@ -515,9 +515,9 @@
 
     <label>種類 / Part Type</label>
     <div style="display:flex;gap:8px;margin-bottom:4px;">
-      <button class="part-btn" onclick="selectPart('前保')" id="part-前保">前保<br><span style="font-size:11px;opacity:0.7;">Front</span></button>
-      <button class="part-btn" onclick="selectPart('後保')" id="part-後保">後保<br><span style="font-size:11px;opacity:0.7;">Rear</span></button>
-      <button class="part-btn" onclick="selectPart('其他')" id="part-其他">其他<br><span style="font-size:11px;opacity:0.7;">Other</span></button>
+      <button class="part-btn" onclick="selectPart('前保')" id="part-front">前保<br><span style="font-size:11px;opacity:0.7;">Front</span></button>
+      <button class="part-btn" onclick="selectPart('後保')" id="part-rear">後保<br><span style="font-size:11px;opacity:0.7;">Rear</span></button>
+      <button class="part-btn" onclick="selectPart('其他')" id="part-other">其他<br><span style="font-size:11px;opacity:0.7;">Other</span></button>
     </div>
 
     <label>顏色代號 / Color Code</label>
@@ -609,13 +609,10 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script>
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
 const CONFIG_KEY = 'repair_config';
-
-let currentRaw = '';
 
 function getTodayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -714,41 +711,6 @@ document.getElementById('worker-modal').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('open');
 });
 
-function parseCode(code) {
-  if (!code || code.length < 8) return null;
-  return {
-    raw: code,
-    model: code.slice(1, 3),
-    part: code.slice(3, 8),
-    prodDate: code.slice(8)
-  };
-}
-
-function updateParsedFields(data) {
-  const set = (id, val) => {
-    const el = document.getElementById(id);
-    if (val) {
-      el.innerHTML = val + '<span class="parsed-badge">自動</span>';
-      el.classList.remove('empty');
-    } else {
-      el.innerHTML = '— 請先掃描 QR Code —<span class="parsed-badge">自動</span>';
-      el.classList.add('empty');
-    }
-  };
-  if (data) {
-    set('field-model', data.model);
-    set('field-part', data.part);
-    set('field-prod-date', data.prodDate);
-    document.getElementById('raw-display').style.display = 'block';
-    document.getElementById('raw-code-text').textContent = data.raw;
-  } else {
-    set('field-model', null);
-    set('field-part', null);
-    set('field-prod-date', null);
-    document.getElementById('raw-display').style.display = 'none';
-  }
-}
-
 let currentRaw = '';
 let selectedPart = '';
 
@@ -779,21 +741,11 @@ function loadMemoryToForm() {
   if (m.lastColor) document.getElementById('input-color').value = m.lastColor;
 }
 
-function onModelChange(val) {
-  const other = document.getElementById('input-model-other');
-  if (val === 'OTHER') {
-    other.style.display = 'block';
-    other.focus();
-  } else {
-    other.style.display = 'none';
-    if (val) saveMemory('model', val);
-  }
-}
-
 function selectPart(part, save = true) {
   selectedPart = part;
   document.querySelectorAll('.part-btn').forEach(b => b.classList.remove('selected'));
-  const btn = document.getElementById('part-' + part);
+  const map = { '前保': 'front', '後保': 'rear', '其他': 'other' };
+  const btn = document.getElementById('part-' + (map[part] || part));
   if (btn) btn.classList.add('selected');
   if (save) saveMemory('part', part);
 }
@@ -826,9 +778,6 @@ function hideColorSuggestions() {
   document.getElementById('color-suggestions').style.display = 'none';
 }
 
-function handleManualSerial() {} // kept for compatibility
-function handlePhoto() {}       // kept for compatibility
-
 async function submitRecord() {
   const workerData = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
   if (!workerData.id) { openWorkerModal(); return; }
@@ -846,10 +795,13 @@ async function submitRecord() {
   if (color) { saveMemory('colors', color); saveMemory('lastColor', color); }
 
   const now = new Date();
+  const tzOffset = 8 * 60;
+  const local = new Date(now.getTime() + tzOffset * 60000);
+  const dateStr = local.toISOString().slice(0, 10);
   const record = {
     id: Date.now(),
     timestamp: now.toISOString(),
-    date: now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }),
+    date: dateStr,
     worker: workerData.id,
     raw: '',
     model,
@@ -886,12 +838,21 @@ async function uploadToSheets(record) {
   const cfg = getConfig();
   if (!cfg.url) return false;
   try {
-    const res = await fetch(cfg.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(record)
+    const params = new URLSearchParams({
+      date: record.date,
+      worker: record.worker,
+      model: record.model,
+      part: record.part,
+      color: record.color,
+      points: record.points,
+      note: record.note || '',
+      timestamp: record.timestamp
     });
-    return res.ok;
+    await fetch(cfg.url + '?' + params.toString(), {
+      method: 'GET',
+      mode: 'no-cors'
+    });
+    return true;
   } catch { return false; }
 }
 
