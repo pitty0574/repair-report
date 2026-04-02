@@ -407,6 +407,37 @@
 
   input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
+  .part-btn {
+    flex: 1;
+    height: 56px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.3;
+    transition: all 0.15s;
+  }
+  .part-btn.selected {
+    border-color: var(--accent2);
+    background: var(--tag-bg);
+    color: var(--accent2);
+  }
+
+  .suggestion-item {
+    padding: 12px 16px;
+    font-size: 15px;
+    cursor: pointer;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .suggestion-item:last-child { border-bottom: none; }
+  .suggestion-item:active { background: var(--bg); }
+
   .config-input {
     width: 100%;
     height: 44px;
@@ -470,39 +501,36 @@
   </div>
 
   <div class="card">
-    <div class="card-title">部品掃描 <span style="font-weight:400;">/ Part Scan</span></div>
+    <div class="card-title">部品資訊 <span style="font-weight:400;">/ Part Info</span></div>
 
-    <!-- 主要掃描按鈕：拍照辨識 -->
-    <label for="camera-input" class="scan-btn" id="scanBtn" style="cursor:pointer;margin-bottom:8px;">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-      拍照辨識條碼 / Take Photo to Scan
-    </label>
-    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="handlePhoto(this)">
-
-    <!-- 備用：手動輸入 -->
-    <div style="text-align:center;margin:6px 0 10px;font-size:12px;color:var(--muted);">或手動輸入 / or enter manually</div>
-    <input type="text" id="manual-serial" placeholder="直接輸入生產履歷號碼 / Enter serial number" autocomplete="off" style="text-transform:uppercase;margin-bottom:8px;" oninput="handleManualSerial(this.value)">
-    <!-- scanner removed: using photo capture instead -->
-    <div id="raw-display" style="display:none">
-      <div class="raw-code" id="raw-code-text"></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:10px;">已解析 ↓</div>
+    <label>車型 / Vehicle Model</label>
+    <div style="position:relative;">
+      <select id="input-model" style="width:100%;height:var(--input-h);border:1px solid var(--border);border-radius:8px;padding:0 14px;font-size:16px;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none;" onchange="onModelChange(this.value)">
+        <option value="">— 選擇車型 / Select model —</option>
+        <option value="AQ">AQ</option>
+        <option value="OTHER">其他 / Other</option>
+      </select>
+      <svg style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
-  </div>
+    <input type="text" id="input-model-other" placeholder="請輸入車型 / Enter model" autocomplete="off" style="display:none;margin-top:8px;text-transform:uppercase;">
 
-  <div class="card">
-    <div class="card-title">自動解析資訊 <span style="font-weight:400;">/ Auto-parsed Info</span></div>
-    <label>車型代碼（第2~3碼）/ Vehicle Model Code (digit 2–3)</label>
-    <div class="parsed-field empty" id="field-model">— 請先掃描 QR Code / Scan QR Code first —<span class="parsed-badge">自動 Auto</span></div>
-    <label>部件代碼（第4~8碼）/ Part Code (digit 4–8)</label>
-    <div class="parsed-field empty" id="field-part">— 請先掃描 QR Code / Scan QR Code first —<span class="parsed-badge">自動 Auto</span></div>
-    <label>射出日期（後段碼）/ Production Date (trailing digits)</label>
-    <div class="parsed-field empty" id="field-prod-date">— 請先掃描 QR Code / Scan QR Code first —<span class="parsed-badge">自動 Auto</span></div>
-  </div>
+    <label>種類 / Part Type</label>
+    <div style="display:flex;gap:8px;margin-bottom:4px;">
+      <button class="part-btn" onclick="selectPart('前保')" id="part-前保">前保<br><span style="font-size:11px;opacity:0.7;">Front</span></button>
+      <button class="part-btn" onclick="selectPart('後保')" id="part-後保">後保<br><span style="font-size:11px;opacity:0.7;">Rear</span></button>
+      <button class="part-btn" onclick="selectPart('其他')" id="part-其他">其他<br><span style="font-size:11px;opacity:0.7;">Other</span></button>
+    </div>
 
-  <div class="card">
-    <div class="card-title">手動填寫 <span style="font-weight:400;">/ Manual Entry</span></div>
     <label>顏色代號 / Color Code</label>
-    <input type="text" id="input-color" placeholder="輸入色票編號 / Enter color code" autocomplete="off" style="text-transform:uppercase">
+    <div style="position:relative;">
+      <input type="text" id="input-color" placeholder="輸入色票編號 / Enter color code" autocomplete="off" style="text-transform:uppercase;padding-right:44px;" oninput="showColorSuggestions(this.value)" onfocus="showColorSuggestions(this.value)" onblur="setTimeout(()=>hideColorSuggestions(),200)">
+      <button onclick="document.getElementById('input-color').value='';hideColorSuggestions();" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;">×</button>
+    </div>
+    <div id="color-suggestions" style="display:none;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;margin-top:4px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">補漆記錄 <span style="font-weight:400;">/ Repair Entry</span></div>
     <label>補漆總點數 / Total Repair Points</label>
     <input type="number" id="input-points" placeholder="0" inputmode="numeric" min="0">
     <label>記錄日期 / Record Date</label>
@@ -601,6 +629,7 @@ function init() {
   loadConfig();
   checkWorker();
   checkConnection();
+  loadMemoryToForm();
 }
 
 function loadConfig() {
@@ -725,84 +754,130 @@ function updateParsedFields(data) {
 }
 
 let currentRaw = '';
+let selectedPart = '';
 
-function handleManualSerial(val) {
-  val = val.trim().toUpperCase();
-  if (val.length >= 8) {
-    currentRaw = val;
-    updateParsedFields(parseCode(currentRaw));
-  } else if (val.length === 0) {
-    currentRaw = '';
-    updateParsedFields(null);
+const MEMORY_KEY = 'repair_field_memory';
+
+function getMemory() {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || '{}'); } catch { return {}; }
+}
+
+function saveMemory(key, value) {
+  const m = getMemory();
+  if (!value) return;
+  // Save recent color codes as list (max 8)
+  if (key === 'colors') {
+    const list = m.colors || [];
+    const updated = [value, ...list.filter(v => v !== value)].slice(0, 8);
+    m.colors = updated;
+  } else {
+    m[key] = value;
+  }
+  localStorage.setItem(MEMORY_KEY, JSON.stringify(m));
+}
+
+function loadMemoryToForm() {
+  const m = getMemory();
+  // Restore model
+  if (m.model) {
+    const sel = document.getElementById('input-model');
+    if ([...sel.options].some(o => o.value === m.model)) {
+      sel.value = m.model;
+    } else {
+      sel.value = 'OTHER';
+      document.getElementById('input-model-other').style.display = 'block';
+      document.getElementById('input-model-other').value = m.model;
+    }
+  }
+  // Restore part
+  if (m.part) selectPart(m.part, false);
+  // Restore color
+  if (m.lastColor) {
+    document.getElementById('input-color').value = m.lastColor;
   }
 }
 
-function handlePhoto(input) {
-  const file = input.files[0];
-  if (!file) return;
-  showToast('辨識中... / Processing...', '');
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const img = new Image();
-    img.onload = function() {
-      const MAX = 1200;
-      let w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-        else { w = Math.round(w * MAX / h); h = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      let decoded = null;
-
-      const angles = [0, 90, 180, 270];
-      for (const deg of angles) {
-        if (deg === 90 || deg === 270) { canvas.width = h; canvas.height = w; }
-        else { canvas.width = w; canvas.height = h; }
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(deg * Math.PI / 180);
-        ctx.drawImage(img, -w / 2, -h / 2, w, h);
-        ctx.restore();
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const qr = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
-        if (qr && qr.data) { decoded = qr.data; break; }
-      }
-
-      if (decoded) {
-        currentRaw = decoded;
-        document.getElementById('manual-serial').value = decoded;
-        updateParsedFields(parseCode(currentRaw));
-        showToast('掃描成功！/ Scan successful!', 'success');
-        navigator.vibrate && navigator.vibrate(100);
-      } else {
-        showToast('無法辨識，請手動輸入 / Cannot read, enter manually', 'error');
-      }
-      input.value = '';
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+function onModelChange(val) {
+  const other = document.getElementById('input-model-other');
+  if (val === 'OTHER') {
+    other.style.display = 'block';
+    other.focus();
+  } else {
+    other.style.display = 'none';
+    if (val) saveMemory('model', val);
+  }
 }
+
+function selectPart(part, save = true) {
+  selectedPart = part;
+  document.querySelectorAll('.part-btn').forEach(b => b.classList.remove('selected'));
+  const btn = document.getElementById('part-' + part);
+  if (btn) btn.classList.add('selected');
+  if (save) saveMemory('part', part);
+}
+
+function showColorSuggestions(val) {
+  const m = getMemory();
+  const colors = m.colors || [];
+  const filtered = val
+    ? colors.filter(c => c.startsWith(val.toUpperCase()))
+    : colors;
+
+  const box = document.getElementById('color-suggestions');
+  if (filtered.length === 0) { box.style.display = 'none'; return; }
+
+  box.innerHTML = filtered.map(c => `
+    <div class="suggestion-item" ontouchstart="selectColor('${c}')" onclick="selectColor('${c}')">
+      <span>${c}</span>
+      <span style="font-size:12px;color:var(--muted);">最近使用</span>
+    </div>
+  `).join('');
+  box.style.display = 'block';
+}
+
+function selectColor(val) {
+  document.getElementById('input-color').value = val;
+  hideColorSuggestions();
+}
+
+function hideColorSuggestions() {
+  document.getElementById('color-suggestions').style.display = 'none';
+}
+
+function handleManualSerial() {} // kept for compatibility
+function handlePhoto() {}       // kept for compatibility
 
 async function submitRecord() {
   const workerData = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
   if (!workerData.id) { openWorkerModal(); return; }
-  if (!currentRaw) { showToast('請先掃描 QR Code / Scan QR Code first', 'error'); return; }
+
+  // Get model
+  const modelSel = document.getElementById('input-model').value;
+  const model = modelSel === 'OTHER'
+    ? document.getElementById('input-model-other').value.trim().toUpperCase()
+    : modelSel;
+  if (!model) { showToast('請選擇車型 / Select vehicle model', 'error'); return; }
+  if (!selectedPart) { showToast('請選擇種類 / Select part type', 'error'); return; }
+
+  const color = document.getElementById('input-color').value.trim().toUpperCase();
   const points = document.getElementById('input-points').value.trim();
   if (points === '') { showToast('請填寫補漆點數 / Enter repair points', 'error'); return; }
 
-  const parsed = parseCode(currentRaw);
+  // Save to memory
+  saveMemory('model', modelSel === 'OTHER' ? model : modelSel);
+  saveMemory('part', selectedPart);
+  if (color) { saveMemory('colors', color); saveMemory('lastColor', color); }
+
   const record = {
     id: Date.now(),
     timestamp: new Date().toISOString(),
     date: document.getElementById('input-date').value,
     worker: workerData.id,
-    raw: currentRaw,
-    model: parsed ? parsed.model : '',
-    part: parsed ? parsed.part : '',
-    prodDate: parsed ? parsed.prodDate : '',
-    color: document.getElementById('input-color').value.trim().toUpperCase(),
+    raw: '',
+    model,
+    part: selectedPart,
+    prodDate: '',
+    color,
     points: parseInt(points),
     note: document.getElementById('input-note').value.trim(),
     synced: false
@@ -871,12 +946,13 @@ function getRecords() {
 }
 
 function resetForm() {
-  document.getElementById('input-color').value = '';
+  // Keep model, part, color from memory — only clear points and note
   document.getElementById('input-points').value = '';
   document.getElementById('input-note').value = '';
   document.getElementById('input-date').value = getTodayStr();
-  currentRaw = '';
-  updateParsedFields(null);
+  // Restore last color from memory
+  const m = getMemory();
+  if (m.lastColor) document.getElementById('input-color').value = m.lastColor;
 }
 
 function renderHistory() {
