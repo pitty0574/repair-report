@@ -474,7 +474,7 @@
 <div class="tabs">
   <button class="tab active" onclick="switchTab('form', this)">填寫日報<br><span style="font-size:10px;opacity:0.7;">Entry</span></button>
   <button class="tab" onclick="switchTab('history', this)">本機記錄<br><span style="font-size:10px;opacity:0.7;">Records</span></button>
-  <button class="tab" onclick="switchTab('settings', this)">設定<br><span style="font-size:10px;opacity:0.7;">Settings</span></button>
+  <button class="tab" onclick="promptAdminAccess(this)">⚙<br><span style="font-size:10px;opacity:0.7;">Admin</span></button>
 </div>
 
 <!-- 填寫日報 -->
@@ -613,6 +613,15 @@
 const STORAGE_KEY = 'repair_records';
 const WORKER_KEY = 'repair_worker';
 const CONFIG_KEY = 'repair_config';
+
+function promptAdminAccess(el) {
+  const pw = prompt('請輸入管理員密碼 / Enter admin password:');
+  if (pw === '0000') {
+    switchTab('settings', el);
+  } else if (pw !== null) {
+    showToast('密碼錯誤 / Wrong password', 'error');
+  }
+}
 
 function getTodayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -787,8 +796,8 @@ async function submitRecord() {
   if (!selectedPart) { showToast('請選擇種類 / Select part type', 'error'); return; }
 
   const color = document.getElementById('input-color').value.trim().toUpperCase();
-  const points = document.getElementById('input-points').value.trim();
-  if (points === '') { showToast('請填寫補漆點數 / Enter repair points', 'error'); return; }
+  const points = document.getElementById('input-points').value;
+  if (points === '' || points === null) { showToast('請填寫補漆點數 / Enter repair points', 'error'); return; }
 
   saveMemory('model', model);
   saveMemory('part', selectedPart);
