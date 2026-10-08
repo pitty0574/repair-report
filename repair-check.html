@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>整修終檢日報</title>
+<!--
+  repair-check.html — 整修組 + 終檢組手機輸入介面
+  （補漆組繼續使用 repair-report.html）
+
+  寫入方式：與 repair-report.html 相同的 Apps Script Web App（GET + no-cors），
+  多帶一個參數 sheetName = 「整修階段」或「終檢階段」，由 Apps Script 依此切換分頁。
+  寫入欄位：時間戳記 | 記錄日期 | 工號 | 車型 | 部件 | 顏色 | 備註
+
+  ⚠️ no-cors 模式讀不到 Apps Script 的回應，因此 Apps Script 若尚未支援 sheetName，
+     資料會「看起來上傳成功」但寫到預設（補漆）分頁。上線前請先確認 Apps Script 已修改。
+
+  測試步驟：
+  1. 選工站別「整修」→ 輸入工號 8631 → 車型 ZS → 部件 前保 → 顏色 KY → 送出
+  2. 確認 Google Sheet「整修階段」分頁多一筆
+  3. 關掉網頁重開，所有欄位應該自動帶出剛才的值
+  4. 直接按送出，應該能連續送出同樣內容
+  5. 切換工站別為「終檢」→ 確認彈窗出現 → 送出 → 確認資料跑到「終檢階段」分頁
+  6.（連點測試）快速連按送出多次，Sheet 只應多一筆；按鈕至少鎖 3 秒
+  7.（清除測試）按「清除所有自動記憶」→ 確認 → 重開頁面，全部欄位應為空白
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --border: #dddbd3;
+    --accent: #1a1a1a;
+    --accent2: #3d6b4f;
+    --text: #1a1a1a;
+    --muted: #6b6a66;
+    --danger: #b33a2e;
+    --success: #2d6b44;
+    --repair: #3b82f6;
+    --repair-bg: #e8f1fe;
+    --check: #10b981;
+    --check-bg: #e3f7ef;
+    --station: var(--accent2);
+    --input-h: 48px;
+    --radius: 10px;
+  }
+  body {
+    font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 40px;
+  }
+  body.st-repair { --station: var(--repair); }
+  body.st-check { --station: var(--check); }
+
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 16px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 4px solid var(--station);
+  }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.05em; }
+  header p { font-size: 11px; opacity: 0.55; margin-top: 2px; letter-spacing: 0.08em; }
+
+  main { padding: 20px 16px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    margin-top: 14px;
+  }
+  label:first-of-type { margin-top: 0; }
+  .label-hint { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 6px; }
+
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    height: var(--input-h);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input:focus, select:focus { border-color: var(--station); background: #fff; }
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  select {
+    font-weight: 600;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+    background-size: 6px 6px;
+    background-repeat: no-repeat;
+  }
+
+  .field-row { display: flex; gap: 8px; }
+  .field-row input { flex: 1; min-width: 0; }
+  .field-clear {
+    flex-shrink: 0;
+    width: 64px;
+    height: var(--input-h);
+    font-size: 13px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .field-clear:active { background: var(--bg); }
+
+  .station-banner {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 0.04em;
+    background: #f0eeea;
+    color: var(--muted);
+  }
+  .station-banner.repair { background: var(--repair-bg); color: var(--repair); border: 1.5px solid var(--repair); }
+  .station-banner.check { background: var(--check-bg); color: #047857; border: 1.5px solid var(--check); }
+
+  .submit-btn {
+    width: 100%;
+    height: 64px;
+    background: var(--station);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .submit-btn:disabled { background: #9a9994; cursor: default; }
+  .submit-btn .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .submit-btn.loading .spinner { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .forget-btn {
+    display: block;
+    margin: 28px auto 0;
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 13px;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 8px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 60px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 999;
+    max-width: 90%;
+    text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--danger); }
+
+  .submit-feedback {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 500;
+    padding: 24px 28px;
+    border-radius: 14px;
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.5;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s, visibility 0.4s;
+    width: 85%;
+    max-width: 420px;
+    cursor: pointer;
+  }
+  .submit-feedback.show { opacity: 1; visibility: visible; }
+  .submit-feedback.success { background: var(--success); color: #fff; }
+  .submit-feedback.error { background: var(--danger); color: #fff; }
+  .submit-feedback .fb-detail {
+    display: block;
+    margin-top: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    opacity: 0.9;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>整修 / 終檢日報 <span style="font-weight:400;opacity:0.7;font-size:12px;">Repair &amp; Final Check</span></h1>
+  <p>補漆組請使用 repair-report.html</p>
+</header>
+
+<main>
+  <div class="card">
+    <label for="input-station">工站別 / Station<span class="label-hint">切換請重選</span></label>
+    <select id="input-station" onchange="onStationChange()">
+      <option value="">— 請選擇 / Select —</option>
+      <option value="整修">整修 Repair</option>
+      <option value="終檢">終檢 Final Check</option>
+    </select>
+    <div class="station-banner" id="station-banner">請先選擇工站別 / Select station</div>
+  </div>
+
+  <div class="card">
+    <label for="input-worker">工號 / Employee ID</label>
+    <div class="field-row">
+      <input type="number" id="input-worker" inputmode="numeric" placeholder="工號 / Employee ID" autocomplete="off">
+      <button class="field-clear" onclick="clearField('worker')">清除</button>
+    </div>
+
+    <label for="input-model">車型 / Vehicle Model</label>
+    <div class="field-row">
+      <input type="text" id="input-model" placeholder="例 ZS" autocomplete="off" style="text-transform:uppercase;">
+      <button class="field-clear" onclick="clearField('model')">清除</button>
+    </div>
+
+    <label for="input-part">部件 / Part</label>
+    <div class="field-row">
+      <input type="text" id="input-part" placeholder="例 前保" autocomplete="off">
+      <button class="field-clear" onclick="clearField('part')">清除</button>
+    </div>
+
+    <label for="input-color">顏色 / Color</label>
+    <div class="field-row">
+      <input type="text" id="input-color" placeholder="例 KY" autocomplete="off" style="text-transform:uppercase;">
+      <button class="field-clear" onclick="clearField('color')">清除</button>
+    </div>
+  </div>
+
+  <button class="submit-btn" id="submitBtn" onclick="submitRecord()">
+    <div class="spinner"></div>
+    <span id="submit-label">送出 Submit</span>
+  </button>
+
+  <button class="forget-btn" onclick="forgetAll()">清除所有自動記憶</button>
+</main>
+
+<div class="toast" id="toast"></div>
+<div class="submit-feedback" id="submit-feedback" onclick="hideSubmitFeedback()"></div>
+
+<script>
+// 與 repair-report.html 共用同一個 Apps Script Web App
+const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbwVUeAGF_tUtB-fsRGRzGcCL1TWHq9rsjr4eeyGVTJF8i6eZqOMeBQ12dSzEyO90m7wew/exec';
+
+const KEYS = {
+  station: 'repair_check_station',
+  worker:  'repair_check_worker',
+  model:   'repair_check_model',
+  part:    'repair_check_part',
+  color:   'repair_check_color'
+};
+
+const STATIONS = {
+  '整修': { sheetName: '整修階段', label: '🏭 您目前是：整修組', cls: 'repair' },
+  '終檢': { sheetName: '終檢階段', label: '🔍 您目前是：終檢組', cls: 'check' }
+};
+
+const FIELDS = ['worker', 'model', 'part', 'color'];
+const UPPERCASE_FIELDS = ['model', 'color'];
+
+function el(id) { return document.getElementById(id); }
+
+function store(key, value) {
+  try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key); } catch {}
+}
+function recall(key) {
+  try { return localStorage.getItem(key) || ''; } catch { return ''; }
+}
+
+// 目前已確認的工站別（用於切換時判斷是否需要確認彈窗、取消時還原）
+let currentStation = '';
+
+function init() {
+  const station = recall(KEYS.station);
+  if (STATIONS[station]) {
+    currentStation = station;
+    el('input-station').value = station;
+  }
+  renderStation();
+  FIELDS.forEach(f => { el('input-' + f).value = recall(KEYS[f]); });
+}
+
+function renderStation() {
+  const info = STATIONS[currentStation];
+  const banner = el('station-banner');
+  document.body.classList.remove('st-repair', 'st-check');
+  if (info) {
+    document.body.classList.add('st-' + info.cls);
+    banner.className = 'station-banner ' + info.cls;
+    banner.textContent = info.label;
+  } else {
+    banner.className = 'station-banner';
+    banner.textContent = '請先選擇工站別 / Select station';
+  }
+}
+
+function onStationChange() {
+  const sel = el('input-station');
+  const next = sel.value;
+  if (currentStation && next !== currentStation) {
+    const nextName = next ? next + '組' : '未選擇';
+    if (!confirm(`確定要從${currentStation}組切換到${nextName}嗎？`)) {
+      sel.value = currentStation;
+      return;
+    }
+  }
+  currentStation = next;
+  store(KEYS.station, next);
+  renderStation();
+}
+
+function clearField(field) {
+  const input = el('input-' + field);
+  input.value = '';
+  store(KEYS[field], '');
+  input.focus();
+}
+
+function forgetAll() {
+  if (!confirm('確定要清除所有欄位的記憶？下次打開會變空白。')) return;
+  Object.values(KEYS).forEach(k => store(k, ''));
+  currentStation = '';
+  el('input-station').value = '';
+  FIELDS.forEach(f => { el('input-' + f).value = ''; });
+  renderStation();
+  showToast('已清除所有自動記憶');
+}
+
+function readField(field) {
+  const v = el('input-' + field).value.trim();
+  return UPPERCASE_FIELDS.includes(field) ? v.toUpperCase() : v;
+}
+
+// ===== 送出 =====
+
+let isSubmitting = false;
+const SUBMIT_MIN_LOCK_MS = 3000;   // 從按下起至少鎖 3 秒（Android + 4G 重複觸發）
+const SUBMIT_SUCCESS_MS = 2000;    // 成功訊息與灰色按鈕維持 2 秒
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function showSubmitFeedback(message, detail, type, autoHideMs) {
+  const fb = el('submit-feedback');
+  if (fb._hideTimer) { clearTimeout(fb._hideTimer); fb._hideTimer = null; }
+  fb.textContent = message;
+  if (detail) {
+    const d = document.createElement('span');
+    d.className = 'fb-detail';
+    d.textContent = detail;
+    fb.appendChild(d);
+  }
+  fb.className = 'submit-feedback show ' + type;
+  if (autoHideMs) fb._hideTimer = setTimeout(hideSubmitFeedback, autoHideMs);
+}
+
+function hideSubmitFeedback() {
+  const fb = el('submit-feedback');
+  if (fb._hideTimer) { clearTimeout(fb._hideTimer); fb._hideTimer = null; }
+  fb.className = 'submit-feedback ' + (fb.classList.contains('success') ? 'success' : 'error');
+}
+
+// 失敗訊息不自動淡出，等作業員下次操作（點畫面任何地方或輸入）時才收起
+['pointerdown', 'keydown'].forEach(evt =>
+  document.addEventListener(evt, () => {
+    const fb = el('submit-feedback');
+    if (!isSubmitting && fb.classList.contains('show') && fb.classList.contains('error')) hideSubmitFeedback();
+  }, true)
+);
+
+async function submitRecord() {
+  if (isSubmitting) return;
+
+  const info = STATIONS[currentStation];
+  if (!info) { showToast('請先選擇工站別 / Select station', 'error'); el('input-station').focus(); return; }
+
+  const values = {};
+  for (const f of FIELDS) values[f] = readField(f);
+  const missing = { worker: '工號', model: '車型', part: '部件', color: '顏色' };
+  for (const f of FIELDS) {
+    if (!values[f]) { showToast(`請輸入${missing[f]}`, 'error'); el('input-' + f).focus(); return; }
+  }
+
+  isSubmitting = true;
+  hideSubmitFeedback();
+  const startedAt = Date.now();
+  const btn = el('submitBtn');
+  const label = el('submit-label');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  label.textContent = '上傳中... Uploading...';
+
+  const now = new Date();
+  const local = new Date(now.getTime() + 8 * 60 * 60000); // 台灣時間 UTC+8
+  const record = {
+    sheetName: info.sheetName,
+    timestamp: now.toISOString(),
+    date: local.toISOString().slice(0, 10),
+    worker: values.worker,
+    model: values.model,
+    part: values.part,
+    color: values.color,
+    note: ''
+  };
+
+  let error = '';
+  try {
+    await uploadToSheets(record);
+  } catch (e) {
+    error = (e && e.message) || '網路錯誤 Network error';
+  }
+
+  btn.classList.remove('loading');
+  const summary = `${values.worker} ${values.model} ${values.part} ${values.color}`;
+
+  if (!error) {
+    // 成功才寫入記憶，下次打開或下次送出自動帶出
+    store(KEYS.station, currentStation);
+    FIELDS.forEach(f => store(KEYS[f], values[f]));
+    FIELDS.forEach(f => { el('input-' + f).value = values[f]; });
+
+    label.textContent = '✅ 上傳完成 Upload Complete';
+    showSubmitFeedback('✅ 上傳完成 Upload Complete', `${info.sheetName}｜${summary}`, 'success', SUBMIT_SUCCESS_MS);
+    await sleep(SUBMIT_SUCCESS_MS);
+  } else {
+    label.textContent = '上傳失敗 Failed';
+    showSubmitFeedback('❌ 上傳失敗，請重試 Failed, please retry', error, 'error', 0);
+  }
+
+  // 無論上傳多快，從按下起至少鎖住 3 秒
+  const remaining = SUBMIT_MIN_LOCK_MS - (Date.now() - startedAt);
+  if (remaining > 0) await sleep(remaining);
+
+  btn.disabled = false;
+  label.textContent = '送出 Submit';
+  isSubmitting = false;
+}
+
+async function uploadToSheets(record) {
+  const params = new URLSearchParams(record);
+  // no-cors：讀不到回應內容，只有網路層失敗會丟出例外
+  await fetch(HARDCODED_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' });
+}
+
+function showToast(msg, type = '') {
+  const t = el('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = 'toast'; }, 2500);
+}
+
+init();
+</script>
+</body>
+</html>
