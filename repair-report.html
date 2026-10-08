@@ -277,6 +277,28 @@
   .toast.success { background: var(--success); }
   .toast.error { background: var(--danger); }
 
+  .submit-feedback {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 500;
+    padding: 20px 28px;
+    border-radius: 14px;
+    font-size: 17px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.5;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    opacity: 0;
+    transition: opacity 0.3s;
+    max-width: 85%;
+    cursor: pointer;
+  }
+  .submit-feedback.show { display: block; opacity: 1; }
+  .submit-feedback.success { background: var(--success); color: #fff; }
+  .submit-feedback.error { background: var(--danger); color: #fff; }
+
   .record-item {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -536,7 +558,7 @@
     <input type="text" id="input-note" placeholder="其他備注 / Additional notes">
     <button class="submit-btn" id="submitBtn" onclick="submitRecord()">
       <div class="spinner"></div>
-      <span id="submit-label">送出並上傳至 Google Sheets / Submit & Sync</span>
+      <span id="submit-label">送出 Submit</span>
     </button>
   </div>
 </div>
@@ -608,6 +630,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="submit-feedback" id="submit-feedback" onclick="hideSubmitFeedback()"></div>
 
 <script>
 const STORAGE_KEY = 'repair_records';
@@ -790,7 +813,31 @@ function hideColorSuggestions() {
   document.getElementById('color-suggestions').style.display = 'none';
 }
 
+let isSubmitting = false;
+const SUBMIT_MIN_LOCK_MS = 3000;
+const SUBMIT_DONE_LABEL_MS = 1000;
+const SUBMIT_SUCCESS_TOAST_MS = 2000;
+
+function showSubmitFeedback(message, type, autoHideMs) {
+  const el = document.getElementById('submit-feedback');
+  if (el._hideTimer) { clearTimeout(el._hideTimer); el._hideTimer = null; }
+  el.textContent = message;
+  el.className = 'submit-feedback show ' + type;
+  if (autoHideMs) {
+    el._hideTimer = setTimeout(hideSubmitFeedback, autoHideMs);
+  }
+}
+
+function hideSubmitFeedback() {
+  const el = document.getElementById('submit-feedback');
+  if (el._hideTimer) { clearTimeout(el._hideTimer); el._hideTimer = null; }
+  el.className = 'submit-feedback';
+}
+
 async function submitRecord() {
+  // 二重保險：submit 進行中直接擋掉，不論是按鈕點擊、Enter 鍵或任何其他觸發路徑
+  if (isSubmitting) return;
+
   const workerData = JSON.parse(localStorage.getItem(WORKER_KEY) || '{}');
   if (!workerData.id) { openWorkerModal(); return; }
 
@@ -801,6 +848,15 @@ async function submitRecord() {
   const color = document.getElementById('input-color').value.trim().toUpperCase();
   const points = document.getElementById('input-points').value;
   if (points === '' || points === null) { showToast('請填寫補漆點數 / Enter repair points', 'error'); return; }
+
+  isSubmitting = true;
+  hideSubmitFeedback();
+
+  const btn = document.getElementById('submitBtn');
+  const label = document.getElementById('submit-label');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  label.textContent = '上傳中... Uploading...';
 
   saveMemory('model', model);
   saveMemory('part', selectedPart);
@@ -827,23 +883,32 @@ async function submitRecord() {
 
   saveLocal(record);
 
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true;
-  btn.classList.add('loading');
-  document.getElementById('submit-label').textContent = '上傳中... / Uploading...';
+  const startedAt = Date.now();
+  let ok = false;
+  try {
+    ok = await uploadToSheets(record);
+  } catch {
+    ok = false;
+  }
 
-  const ok = await uploadToSheets(record);
+  // 無論寫入多快完成，從按下按鈕起至少鎖住 3 秒才解鎖
+  const remaining = SUBMIT_MIN_LOCK_MS - (Date.now() - startedAt);
+  if (remaining > 0) await new Promise(r => setTimeout(r, remaining));
+
   if (ok) {
     markSynced(record.id);
-    showToast('已送出並同步至 Google Sheets！/ Synced!', 'success');
+    showSubmitFeedback('✅ 上傳完成 Upload Complete', 'success', SUBMIT_SUCCESS_TOAST_MS);
+    label.textContent = '✅ 已上傳 Uploaded';
+    await new Promise(r => setTimeout(r, SUBMIT_DONE_LABEL_MS));
   } else {
-    showToast('已存本機，稍後重試 / Saved locally, will retry', 'error');
+    showSubmitFeedback('❌ 上傳失敗，請重試 Failed, please retry', 'error', 0);
   }
 
   btn.disabled = false;
   btn.classList.remove('loading');
-  document.getElementById('submit-label').textContent = '送出並上傳至 Google Sheets / Submit & Sync';
+  label.textContent = '送出 Submit';
   resetForm();
+  isSubmitting = false;
 }
 
 async function uploadToSheets(record) {
