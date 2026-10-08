@@ -23,6 +23,23 @@
   5. 切換工站別為「終檢」→ 確認彈窗出現 → 送出 → 確認資料跑到「終檢階段」分頁
   6.（連點測試）快速連按送出多次，Sheet 只應多一筆；按鈕至少鎖 3 秒
   7.（清除測試）按「清除所有自動記憶」→ 確認 → 重開頁面，全部欄位應為空白
+
+  今日完成明細（送出按鈕下方）：
+  - 本機 localStorage（key: today_records_YYYYMMDD）每次送出成功立刻 +1
+  - 讀 Google Sheet 校正：頁面載入、每 2 分鐘、按「🔄 更新」；筆數不同時以 Sheet 為準
+  - 只「讀」Sheet（Sheets API + 公開 API Key），寫入仍走 Apps Script，互不影響
+  - ⚠️ 需在下方 SHEET_ID / API_KEY 填入實際值，且試算表需設為「知道連結的人可檢視」；未填時只用本機計數
+
+  今日完成明細測試步驟：
+  1. 開啟 repair-check.html
+  2. 選整修 / 輸入工號 8631 / 輸入車型 ZS 部件 前保 顏色 KY
+  3. 送出 → 下方顯示「總計 1 隻 / ZS: 1 隻」
+  4. 連續送出 5 次 → 顯示「總計 6 隻 / ZS: 6 隻」
+  5. 改車型為 AQ → 送出 → 顯示「總計 7 隻 / ZS: 6, AQ: 1」
+  6. 按「🔄 更新」→ 讀取 Sheet 校正（右上角閃「✓ 已同步」；網路失敗顯示離線模式）
+  7. 點「▼ 展開詳細」→ 顯示每筆的時間和內容（最新在上，最多 50 筆）
+  8. 改工站別為終檢 → 計數歸零重新讀取終檢階段分頁
+  9. 關閉瀏覽器重開 → 當天記錄還在，不會消失（隔天打開自動歸零）
 -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -239,6 +256,66 @@
     opacity: 0.9;
     word-break: break-all;
   }
+
+  /* ===== 今日完成明細 ===== */
+  .today-card {
+    position: relative;
+    margin-top: 16px;
+    border: 2px solid var(--border);
+  }
+  body.st-repair .today-card { border-color: var(--repair); }
+  body.st-check .today-card { border-color: var(--check); }
+  .today-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+  .today-title small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 4px; }
+  .sync-status {
+    position: absolute;
+    top: 12px; right: 14px;
+    font-size: 11px;
+    color: var(--success);
+    opacity: 0;
+    transition: opacity 0.3s;
+    max-width: 55%;
+    text-align: right;
+  }
+  .sync-status.show { opacity: 1; }
+  .sync-status.warn { color: var(--danger); opacity: 1; }
+  .today-total { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .today-total .num {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    color: var(--station);
+    margin: 0 4px;
+  }
+  .today-sub { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  .today-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .today-table td, .today-table th { padding: 7px 4px; border-bottom: 1px solid #eeece6; word-break: break-all; }
+  .today-table th { font-size: 12px; color: var(--muted); font-weight: 600; text-align: left; }
+  .today-table .r { text-align: right; white-space: nowrap; }
+  .mono { font-family: 'SF Mono', Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .today-empty { text-align: center; color: var(--muted); padding: 14px 0 6px; line-height: 1.8; font-size: 14px; }
+  .today-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .today-actions button {
+    flex: 1;
+    height: 46px;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .today-actions button:active { background: #e8e6e0; }
+  .today-actions button:disabled { opacity: 0.5; }
+  .today-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+  }
+  .today-details.open { max-height: 3000px; }
+  .today-details-inner { padding-top: 14px; }
+  .today-more { text-align: center; font-size: 12px; color: var(--muted); padding-top: 10px; }
 </style>
 </head>
 <body>
@@ -289,6 +366,19 @@
     <div class="spinner"></div>
     <span id="submit-label">送出 Submit</span>
   </button>
+
+  <div class="card today-card" id="today-card">
+    <div class="sync-status" id="sync-status"></div>
+    <div class="today-title">📊 今日完成明細 <small>Today's Summary</small></div>
+    <div id="today-summary"></div>
+    <div class="today-details" id="today-details">
+      <div class="today-details-inner" id="today-details-inner"></div>
+    </div>
+    <div class="today-actions">
+      <button id="today-refresh" onclick="syncTodayFromSheet(true)">🔄 更新 Refresh</button>
+      <button id="today-toggle" onclick="toggleTodayDetails()">▼ 展開詳細 Show Details</button>
+    </div>
+  </div>
 
   <button class="forget-btn" onclick="forgetAll()">清除所有自動記憶</button>
 </main>
@@ -365,6 +455,7 @@ function onStationChange() {
   currentStation = next;
   store(KEYS.station, next);
   renderStation();
+  onTodayContextChange();
 }
 
 function clearField(field) {
@@ -381,6 +472,7 @@ function forgetAll() {
   el('input-station').value = '';
   FIELDS.forEach(f => { el('input-' + f).value = ''; });
   renderStation();
+  renderToday();
   showToast('已清除所有自動記憶');
 }
 
@@ -475,6 +567,7 @@ async function submitRecord() {
     store(KEYS.station, currentStation);
     FIELDS.forEach(f => store(KEYS[f], values[f]));
     FIELDS.forEach(f => { el('input-' + f).value = values[f]; });
+    addTodayRecord(values);
 
     label.textContent = '✅ 上傳完成 Upload Complete';
     showSubmitFeedback('✅ 上傳完成 Upload Complete', `${info.sheetName}｜${summary}`, 'success', SUBMIT_SUCCESS_MS);
@@ -499,6 +592,213 @@ async function uploadToSheets(record) {
   await fetch(HARDCODED_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' });
 }
 
+// ===== 今日完成明細 =====
+// 只「讀」Sheet 做校正；寫入仍走上面的 Apps Script。
+// TODO: 請補上實際的 Google Sheet ID 與公開 API Key（Google Cloud Console → 憑證 → API 金鑰，限制為 Sheets API）
+const SHEET_ID = 'YOUR_SHEET_ID';
+const API_KEY = 'YOUR_API_KEY';
+const SHEET_CONFIGURED = !SHEET_ID.startsWith('YOUR_') && !API_KEY.startsWith('YOUR_');
+
+const TODAY_PREFIX = 'today_records_';
+const TODAY_SYNC_MS = 2 * 60 * 1000;
+const TODAY_DETAIL_MAX = 50;
+
+let todayDetailsOpen = false;
+let todaySyncSeq = 0;
+
+// 台灣時間（UTC+8）的 Date，用 toISOString() 取出日期/時間字串
+function taiwanNow() { return new Date(Date.now() + 8 * 60 * 60000); }
+function todayStr() { return taiwanNow().toISOString().slice(0, 10); }
+function todayKey() { return TODAY_PREFIX + todayStr().replace(/-/g, ''); }
+
+function todayContext() {
+  return { station: currentStation, worker: readField('worker') };
+}
+
+// 取得今天、目前工站別 + 工號的記錄；跨日 / 換工站 / 換工號都會歸零
+function loadToday() {
+  const ctx = todayContext();
+  const date = todayStr();
+  let data = null;
+  try { data = JSON.parse(localStorage.getItem(todayKey()) || 'null'); } catch {}
+  if (!data || data.date !== date || data.station !== ctx.station || String(data.worker) !== String(ctx.worker)) {
+    data = { station: ctx.station, worker: ctx.worker, date, records: [] };
+    saveToday(data);
+  }
+  return data;
+}
+
+function saveToday(data) {
+  try {
+    // 順便清掉前幾天留下的 key
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(TODAY_PREFIX) && k !== todayKey()) localStorage.removeItem(k);
+    }
+    localStorage.setItem(todayKey(), JSON.stringify(data));
+  } catch {}
+}
+
+function addTodayRecord(values) {
+  const data = loadToday();
+  data.records.push({
+    time: taiwanNow().toISOString().slice(11, 16),
+    model: values.model,
+    part: values.part,
+    color: values.color
+  });
+  saveToday(data);
+  renderToday();
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderToday() {
+  const summary = el('today-summary');
+  const inner = el('today-details-inner');
+  const toggle = el('today-toggle');
+  const ctx = todayContext();
+
+  if (!ctx.station || !ctx.worker) {
+    summary.innerHTML = '<div class="today-empty">請先選擇工站別並輸入工號<br>Select station and enter Employee ID</div>';
+    inner.innerHTML = '';
+    toggle.disabled = true;
+    return;
+  }
+
+  const records = loadToday().records;
+  if (!records.length) {
+    summary.innerHTML = '<div class="today-empty">今天還沒有記錄 No records yet<br>開始輸入第一筆吧！Start your first record!</div>';
+    inner.innerHTML = '';
+    toggle.disabled = true;
+    return;
+  }
+  toggle.disabled = false;
+
+  const counts = {};
+  records.forEach(r => { counts[r.model] = (counts[r.model] || 0) + 1; });
+  const rows = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([m, n]) => `<tr><td>${esc(m)}</td><td class="r mono">${n} 隻</td></tr>`)
+    .join('');
+  summary.innerHTML =
+    `<div class="today-total">總計 Total：<span class="num">${records.length}</span>隻</div>` +
+    `<div class="today-sub">依車型 By Model</div>` +
+    `<table class="today-table"><tbody>${rows}</tbody></table>`;
+
+  // 依時間倒序（同一分鐘內後送出的在上）
+  const sorted = records.map((r, i) => ({ r, i }))
+    .sort((a, b) => b.r.time.localeCompare(a.r.time) || b.i - a.i)
+    .map(x => x.r);
+  const shown = sorted.slice(0, TODAY_DETAIL_MAX);
+  const detailRows = shown.map(r =>
+    `<tr><td class="mono">${esc(r.time)}</td><td>${esc(r.model)}</td><td>${esc(r.part)}</td><td>${esc(r.color)}</td></tr>`
+  ).join('');
+  const more = sorted.length - shown.length;
+  inner.innerHTML =
+    `<table class="today-table"><thead><tr><th>時間</th><th>車型</th><th>部件</th><th>顏色</th></tr></thead><tbody>${detailRows}</tbody></table>` +
+    (more > 0 ? `<div class="today-more">...還有 ${more} 筆（請到看板查看）</div>` : '');
+}
+
+function toggleTodayDetails() {
+  todayDetailsOpen = !todayDetailsOpen;
+  el('today-details').classList.toggle('open', todayDetailsOpen);
+  el('today-toggle').textContent = todayDetailsOpen ? '▲ 收起詳細 Hide Details' : '▼ 展開詳細 Show Details';
+}
+
+function showSyncStatus(msg, warn) {
+  const s = el('sync-status');
+  clearTimeout(s._timer);
+  s.textContent = msg;
+  s.className = 'sync-status ' + (warn ? 'warn' : 'show');
+  if (!warn) s._timer = setTimeout(() => { s.className = 'sync-status'; }, 1000);
+}
+
+// Sheet 的日期可能是 "2026-10-08" 或 "2026/10/8"，統一成 YYYY-MM-DD
+function normalizeDate(v) {
+  const m = String(v || '').match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : '';
+}
+
+// A 欄時間戳記 → 台灣時間 HH:MM（支援 ISO 字串與 Sheet 格式化後的「2026/10/8 下午 3:15:00」）
+function timeFromStamp(v) {
+  const s = String(v || '');
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d)) return new Date(d.getTime() + 8 * 60 * 60000).toISOString().slice(11, 16);
+  }
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  let h = parseInt(m[1], 10);
+  if (/下午|PM/i.test(s) && h < 12) h += 12;
+  if (/上午|AM/i.test(s) && h === 12) h = 0;
+  return String(h).padStart(2, '0') + ':' + m[2];
+}
+
+async function syncTodayFromSheet(manual) {
+  const ctx = todayContext();
+  const info = STATIONS[ctx.station];
+  if (!info || !ctx.worker) return;
+  if (!SHEET_CONFIGURED) {
+    if (manual) showSyncStatus('⚠️ 未設定 Sheet，僅本機計數', true);
+    return;
+  }
+  if (isSubmitting && !manual) return; // 送出中先不校正，避免 Sheet 還沒寫入就被覆蓋
+
+  const seq = ++todaySyncSeq;
+  const btn = el('today-refresh');
+  btn.disabled = true;
+  try {
+    const range = encodeURIComponent(`${info.sheetName}!A2:F10000`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?key=${API_KEY}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+
+    // 期間若切換了工站別 / 工號，或有更新的請求，丟棄這次結果
+    const now = todayContext();
+    if (seq !== todaySyncSeq || now.station !== ctx.station || now.worker !== ctx.worker) return;
+
+    const today = todayStr();
+    const sheetRecords = (json.values || [])
+      .filter(row => normalizeDate(row[1]) === today && String(row[2] || '').trim() === String(ctx.worker))
+      .map(row => ({
+        time: timeFromStamp(row[0]),
+        model: String(row[3] || '').trim(),
+        part: String(row[4] || '').trim(),
+        color: String(row[5] || '').trim()
+      }));
+
+    const data = loadToday();
+    if (sheetRecords.length !== data.records.length) {
+      data.records = sheetRecords;
+      saveToday(data);
+    }
+    renderToday();
+    showSyncStatus('✓ 已同步', false);
+  } catch (e) {
+    if (seq === todaySyncSeq) showSyncStatus('⚠️ 離線模式（本機數字可能不準）', true);
+  } finally {
+    if (seq === todaySyncSeq) btn.disabled = false;
+  }
+}
+
+function onTodayContextChange() {
+  renderToday();
+  syncTodayFromSheet(false);
+}
+
+function initToday() {
+  el('input-worker').addEventListener('change', onTodayContextChange);
+  renderToday();
+  syncTodayFromSheet(false);
+  setInterval(() => syncTodayFromSheet(false), TODAY_SYNC_MS);
+  // 跨日自動歸零：頁面一直開著也會在回到前景時重新整理
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) renderToday(); });
+}
+
 function showToast(msg, type = '') {
   const t = el('toast');
   t.textContent = msg;
@@ -508,6 +808,7 @@ function showToast(msg, type = '') {
 }
 
 init();
+initToday();
 </script>
 </body>
 </html>
