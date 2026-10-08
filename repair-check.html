@@ -9,10 +9,10 @@
   （補漆組繼續使用 repair-report.html）
 
   寫入方式：與 repair-report.html 相同的 Apps Script Web App（GET + no-cors），
-  多帶一個參數 sheetName = 「整修階段」或「終檢階段」，由 Apps Script 依此切換分頁。
+  多帶一個參數 sheet = 「整修階段」或「終檢階段」，由 Apps Script 依此切換分頁（不帶 sheet 則寫入補漆的「整修日報」）。
   寫入欄位：時間戳記 | 記錄日期 | 工號 | 車型 | 部件 | 顏色 | 備註
 
-  ⚠️ no-cors 模式讀不到 Apps Script 的回應，因此 Apps Script 若尚未支援 sheetName，
+  ⚠️ no-cors 模式讀不到 Apps Script 的回應，因此 Apps Script 若尚未支援 sheet 參數，
      資料會「看起來上傳成功」但寫到預設（補漆）分頁。上線前請先確認 Apps Script 已修改。
 
   測試步驟：
@@ -450,7 +450,7 @@ async function submitRecord() {
   const now = new Date();
   const local = new Date(now.getTime() + 8 * 60 * 60000); // 台灣時間 UTC+8
   const record = {
-    sheetName: info.sheetName,
+    sheet: info.sheetName,
     timestamp: now.toISOString(),
     date: local.toISOString().slice(0, 10),
     worker: values.worker,
