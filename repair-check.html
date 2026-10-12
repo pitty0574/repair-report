@@ -58,8 +58,29 @@
   9. 送出成功 → 彈出綠色卡片顯示剛送的內容（含工站別、工號、車型、部件、顏色、時間）
   10. 2 秒後彈窗自動消失
   11. 送出失敗（可開飛航模式測）→ 彈出紅色卡片，需手動關閉
-  12. 送出 1 筆 ZS/KY → 「最近用過」顯示 [ZS] 和 [KY]
-  13. 點 [ZS] 標籤 → 車型欄位自動填入 ZS
+  12. 送出 1 筆 ZS/KY → 顏色下方「最近用過」顯示 [KY]（車型已改下拉，不再有最近使用標籤）
+  13. 點 [KY] 標籤 → 顏色欄位自動填入 KY
+  （步驟 2、5 的車型手動輸入，現在要先把車型類別選「其他」才會出現）
+
+  車型兩層下拉 + 部件下拉：
+  - 車型類別：Mazda / Bumper / 其他。Mazda、Bumper 顯示第二層代號下拉；其他 → 改顯示手動輸入框（含轉大寫、黃框）
+  - 類別變動會清空車型；Sheet 車型欄只寫代號（ZS、JD…），不寫類別
+  - 部件下拉顯示「前保（62022）」等完整名稱，送出只送括號前文字（前保/後保/側裙）
+  - 部件選「其他（OTHER）」→ 出現輸入框，送出與預覽都直接用作業員輸入的名稱（方案 B）
+  - 記憶：類別 repair_check_model_category、車型 repair_check_model、部件 repair_check_part（存送出值，
+    非固定選項的值 → 下次自動選「其他」並帶入輸入框）；舊資料沒有類別時依車型代號自動推回類別
+  - 切換工站別（確認後）→ 清空所有欄位（工號、類別、車型、部件、顏色）與其記憶
+
+  測試步驟：
+  1. 開啟 repair-check.html
+  2. 車型類別選「Mazda」→ 第二層出現 JD/JJ/JL/JE 選項
+  3. 車型類別選「Bumper」→ 第二層出現 JS/ZS/RV/PU/AQ/TF/BH 選項
+  4. 車型類別選「其他」→ 第二層消失，手動輸入框出現
+  5. 部件下拉選「前保（62022）」→ 預覽顯示「前保」
+  6. 部件下拉選「其他（OTHER）」→ 出現自訂輸入框 → 輸入「新部件X」→ 預覽顯示「新部件X」
+  7. 送出成功 → 彈窗顯示剛送的內容
+  8. 關閉瀏覽器重開 → 類別、車型、部件都自動帶出上次選擇
+  9. 切換工站別 → 清空所有欄位（包含類別）
 -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -152,11 +173,18 @@
 
   select {
     font-weight: 600;
-    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
-    background-size: 6px 6px;
+    font-size: 17px;
+    padding-right: 44px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%);
+    background-position: calc(100% - 26px) 50%, calc(100% - 17px) 50%;
+    background-size: 9px 9px;
     background-repeat: no-repeat;
   }
+  select option { font-size: 17px; font-weight: 600; }
+  select:disabled { opacity: 0.5; }
+  [hidden] { display: none !important; }
+  /* 包在 div 裡的欄位：label 仍保留上方間距 */
+  .field-group > label { margin-top: 14px; }
 
   .field-row { display: flex; gap: 8px; }
   .field-row input { flex: 1; min-width: 0; }
@@ -423,20 +451,48 @@
     </div>
     <div class="field-warn" id="warn-worker"></div>
 
-    <label for="input-model">車型 / Vehicle Model</label>
-    <div class="field-row">
-      <input type="text" id="input-model" placeholder="例 ZS" autocomplete="off" autocapitalize="characters">
-      <button class="field-clear" onclick="clearField('model')">清除</button>
-    </div>
-    <div class="field-warn" id="warn-model"></div>
-    <div class="recent-tags" id="recent-model"></div>
+    <label for="input-model-category">車型類別 / Model Category</label>
+    <select id="input-model-category" onchange="onModelCategoryChange()">
+      <option value="">— 請選擇 / Select —</option>
+      <option value="Mazda">Mazda</option>
+      <option value="Bumper">Bumper</option>
+      <option value="其他">其他（手動輸入）</option>
+    </select>
 
-    <label for="input-part">部件 / Part</label>
-    <div class="field-row">
-      <input type="text" id="input-part" placeholder="例 前保" autocomplete="off">
-      <button class="field-clear" onclick="clearField('part')">清除</button>
+    <!-- Mazda / Bumper：第二層車型下拉 -->
+    <div class="field-group" id="model-select-wrap">
+      <label for="input-model-select">車型 / Vehicle Model</label>
+      <select id="input-model-select" onchange="validateForm()"></select>
     </div>
-    <div class="field-warn" id="warn-part"></div>
+
+    <!-- 其他：手動輸入車型 -->
+    <div class="field-group" id="model-text-wrap" hidden>
+      <label for="input-model">車型 / Vehicle Model<span class="label-hint">手動輸入</span></label>
+      <div class="field-row">
+        <input type="text" id="input-model" placeholder="例 ZS" autocomplete="off" autocapitalize="characters">
+        <button class="field-clear" onclick="clearField('model')">清除</button>
+      </div>
+      <div class="field-warn" id="warn-model"></div>
+    </div>
+
+    <!-- option 的 value 就是送出值（括號前的文字），顯示文字給作業員看完整名稱 -->
+    <label for="input-part">部件 / Part</label>
+    <select id="input-part" onchange="onPartChange()">
+      <option value="">— 請選擇 / Select —</option>
+      <option value="前保">前保（62022）</option>
+      <option value="後保">後保（85022）</option>
+      <option value="側裙">側裙（SIDE PART）</option>
+      <option value="其他">其他（OTHER）</option>
+    </select>
+
+    <!-- 部件選「其他」：輸入實際部件名稱，送出時直接記這個名稱 -->
+    <div class="field-group" id="part-custom-wrap" hidden>
+      <label for="input-part-custom">實際部件名稱 / Part Name</label>
+      <div class="field-row">
+        <input type="text" id="input-part-custom" placeholder="輸入部件名稱" autocomplete="off">
+        <button class="field-clear" onclick="clearField('part-custom')">清除</button>
+      </div>
+    </div>
 
     <label for="input-color">顏色 / Color</label>
     <div class="field-row">
@@ -482,9 +538,19 @@ const KEYS = {
   station: 'repair_check_station',
   worker:  'repair_check_worker',
   model:   'repair_check_model',
+  modelCategory: 'repair_check_model_category',
   part:    'repair_check_part',
   color:   'repair_check_color'
 };
+
+// 車型兩層下拉：類別 → 車型代號（送出只送代號，不送類別）
+const OTHER = '其他';
+const MODEL_CATEGORIES = {
+  'Mazda':  ['JD', 'JJ', 'JL', 'JE'],
+  'Bumper': ['JS', 'ZS', 'RV', 'PU', 'AQ', 'TF', 'BH']
+};
+// 部件固定選項（= 送出值）；另有「其他」→ 送出作業員輸入的實際名稱
+const PART_OPTIONS = ['前保', '後保', '側裙'];
 
 const STATIONS = {
   '整修': { sheetName: '整修階段', label: '🏭 您目前是：整修組', cls: 'repair' },
@@ -513,12 +579,72 @@ function init() {
     el('input-station').value = station;
   }
   renderStation();
-  FIELDS.forEach(f => {
-    const input = el('input-' + f);
-    input.value = recall(KEYS[f]);
-    input.addEventListener('input', onFieldInput);
+  el('input-worker').value = recall(KEYS.worker);
+  el('input-color').value = recall(KEYS.color);
+  const model = recall(KEYS.model);
+  const savedCat = recall(KEYS.modelCategory);
+  // 舊版只存了車型沒有類別 → 依代號推回類別
+  setModel(savedCat === OTHER || MODEL_CATEGORIES[savedCat] ? savedCat : categoryOf(model), model);
+  setPart(recall(KEYS.part));
+  ['worker', 'model', 'part-custom', 'color'].forEach(f => {
+    el('input-' + f).addEventListener('input', onFieldInput);
   });
   validateForm();
+}
+
+// ===== 車型 / 部件下拉 =====
+
+function categoryOf(model) {
+  for (const [cat, list] of Object.entries(MODEL_CATEGORIES)) {
+    if (list.includes(model)) return cat;
+  }
+  return model ? OTHER : '';
+}
+
+// 依類別切換：Mazda/Bumper 顯示第二層下拉，「其他」顯示手動輸入框
+function setModel(cat, model) {
+  if (cat !== OTHER && !MODEL_CATEGORIES[cat]) cat = '';
+  el('input-model-category').value = cat;
+  el('input-model').value = cat === OTHER ? model : '';
+
+  const list = MODEL_CATEGORIES[cat] || [];
+  const sel = el('input-model-select');
+  sel.innerHTML =
+    `<option value="">${list.length ? '— 請選擇車型 / Select —' : '— 請先選類別 / Select category first —'}</option>` +
+    list.map(m => `<option value="${m}">${m}</option>`).join('');
+  sel.disabled = !list.length;
+  sel.value = list.includes(model) ? model : '';
+
+  el('model-select-wrap').hidden = cat === OTHER;
+  el('model-text-wrap').hidden = cat !== OTHER;
+}
+
+function onModelCategoryChange() {
+  const cat = el('input-model-category').value;
+  setModel(cat, '');   // 類別變動 → 清空車型
+  if (cat === OTHER) el('input-model').focus();
+  validateForm();
+}
+
+// 部件：固定選項直接選；其他值（自訂名稱）→ 選「其他」並帶入輸入框
+function setPart(value) {
+  const fixed = PART_OPTIONS.includes(value);
+  el('input-part').value = fixed ? value : (value ? OTHER : '');
+  el('input-part-custom').value = fixed ? '' : value;
+  el('part-custom-wrap').hidden = el('input-part').value !== OTHER;
+}
+
+function onPartChange() {
+  const isOther = el('input-part').value === OTHER;
+  el('part-custom-wrap').hidden = !isOther;
+  if (isOther) el('input-part-custom').focus();
+  validateForm();
+}
+
+function clearWorkFields() {
+  setModel('', '');
+  setPart('');
+  el('input-color').value = '';
 }
 
 function renderStation() {
@@ -544,6 +670,10 @@ function onStationChange() {
       sel.value = currentStation;
       return;
     }
+    // 切換工站別 → 清空所有欄位（含車型類別）與其記憶
+    el('input-worker').value = '';
+    clearWorkFields();
+    [KEYS.worker, KEYS.model, KEYS.modelCategory, KEYS.part, KEYS.color].forEach(k => store(k, ''));
   }
   currentStation = next;
   store(KEYS.station, next);
@@ -555,7 +685,7 @@ function onStationChange() {
 function clearField(field) {
   const input = el('input-' + field);
   input.value = '';
-  store(KEYS[field], '');
+  store(field === 'part-custom' ? KEYS.part : KEYS[field], '');
   validateForm();
   input.focus();
 }
@@ -565,7 +695,8 @@ function forgetAll() {
   Object.values(KEYS).forEach(k => store(k, ''));
   currentStation = '';
   el('input-station').value = '';
-  FIELDS.forEach(f => { el('input-' + f).value = ''; });
+  el('input-worker').value = '';
+  clearWorkFields();
   renderStation();
   renderToday();
   validateForm();
@@ -585,7 +716,17 @@ function normalizeField(field, raw) {
   return v.trim();
 }
 
+// 車型：下拉選的代號，或「其他」時的手動輸入；部件：下拉 value，或「其他」時的實際名稱
 function readField(field) {
+  if (field === 'model') {
+    const cat = el('input-model-category').value;
+    if (cat === OTHER) return normalizeField('model', el('input-model').value);
+    return MODEL_CATEGORIES[cat] ? el('input-model-select').value : '';
+  }
+  if (field === 'part') {
+    const p = el('input-part').value;
+    return p === OTHER ? normalizeField('part', el('input-part-custom').value) : p;
+  }
   return normalizeField(field, el('input-' + field).value);
 }
 
@@ -636,9 +777,9 @@ function updateSubmitState() {
   el('submit-hint').classList.toggle('show', !isSubmitting && formBlocked);
 }
 
-// 最近使用標籤：取今日明細中出現次數最多的前 5 個，點一下填入
+// 最近使用標籤（只剩顏色；車型已改下拉）：取今日明細中出現次數最多的前 5 個，點一下填入
 function renderRecentTags(records) {
-  ['model', 'color'].forEach(field => {
+  ['color'].forEach(field => {
     const box = el('recent-' + field);
     const counts = {};
     (records || []).forEach(r => { if (r[field]) counts[r[field]] = (counts[r[field]] || 0) + 1; });
@@ -748,7 +889,12 @@ async function submitRecord() {
     // 成功才寫入記憶，下次打開或下次送出自動帶出
     store(KEYS.station, currentStation);
     FIELDS.forEach(f => store(KEYS[f], values[f]));
-    FIELDS.forEach(f => { el('input-' + f).value = values[f]; });
+    const cat = el('input-model-category').value;
+    store(KEYS.modelCategory, cat);
+    el('input-worker').value = values.worker;
+    el('input-color').value = values.color;
+    setModel(cat, values.model);
+    setPart(values.part);
     addTodayRecord(values);
 
     label.textContent = '✅ 上傳完成 Upload Complete';
