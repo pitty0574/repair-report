@@ -81,6 +81,27 @@
   7. 送出成功 → 彈窗顯示剛送的內容
   8. 關閉瀏覽器重開 → 類別、車型、部件都自動帶出上次選擇
   9. 切換工站別 → 清空所有欄位（包含類別）
+
+  部件下拉依車型類別切換：
+  - Bumper：前保（62022）/ 後保（85022）/ 側裙（SIDE PART）/ 其他（OTHER）
+  - Mazda： 前下巴（FRONT PART）/ 後下巴（REAR PART）/ 側裙 / 其他
+  - 其他：  optgroup 分組列出全部（Bumper 部件 / Mazda 部件 / 共用）
+  - 未選類別 → 部件下拉停用，顯示「請先選類別」
+  - 切換類別 → 部件選項換成新類別的，原本選的部件與記憶 repair_check_part 一起清空
+  - 送出 / 彈窗 / 今日明細都只用括號前的中文名稱（前保、前下巴…）；「其他」送自訂名稱
+  - 重開頁面：先帶類別，記憶的部件屬於該類別或共用（側裙/其他/自訂名稱）才帶出，否則留空
+
+  測試步驟：
+  1. 開啟 repair-check.html
+  2. 車型類別選「Mazda」→ 部件下拉顯示「前下巴/後下巴/側裙/其他」
+  3. 選 Mazda → JD → 部件選「前下巴（FRONT PART）」
+  4. 車型類別切換到「Bumper」→ 部件下拉變成「前保/後保/側裙/其他」，原本的「前下巴」被清空
+  5. 車型類別選「其他」→ 部件下拉顯示所有分組（Bumper 部件 / Mazda 部件 / 共用）
+  6. 送出 Mazda + JD + 前下巴 → 彈窗顯示「部件：前下巴」
+  7. 送出 Bumper + ZS + 前保 → 彈窗顯示「部件：前保」
+  8. 到 Google Sheet 看寫入的是中文名稱（不是 FRONT PART 或 62022）
+  9. 關閉瀏覽器重開 → 類別和部件自動帶出上次選擇
+  10. 選「其他」部件 → 跳出自訂輸入框 → 輸入自訂內容 → 送出 → Sheet 記自訂內容
 -->
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -477,13 +498,8 @@
 
     <!-- option 的 value 就是送出值（括號前的文字），顯示文字給作業員看完整名稱 -->
     <label for="input-part">部件 / Part</label>
-    <select id="input-part" onchange="onPartChange()">
-      <option value="">— 請選擇 / Select —</option>
-      <option value="前保">前保（62022）</option>
-      <option value="後保">後保（85022）</option>
-      <option value="側裙">側裙（SIDE PART）</option>
-      <option value="其他">其他（OTHER）</option>
-    </select>
+    <!-- 選項依車型類別由 renderPartOptions() 產生 -->
+    <select id="input-part" onchange="onPartChange()"></select>
 
     <!-- 部件選「其他」：輸入實際部件名稱，送出時直接記這個名稱 -->
     <div class="field-group" id="part-custom-wrap" hidden>
@@ -549,8 +565,23 @@ const MODEL_CATEGORIES = {
   'Mazda':  ['JD', 'JJ', 'JL', 'JE'],
   'Bumper': ['JS', 'ZS', 'RV', 'PU', 'AQ', 'TF', 'BH']
 };
-// 部件固定選項（= 送出值）；另有「其他」→ 送出作業員輸入的實際名稱
-const PART_OPTIONS = ['前保', '後保', '側裙'];
+// 部件選項依車型類別切換：value = 送出值（括號前中文），label = 下拉顯示文字
+// 「其他」→ 送出作業員輸入的實際名稱
+const PART_LABELS = {
+  '前保':   '前保（62022）',
+  '後保':   '後保（85022）',
+  '前下巴': '前下巴（FRONT PART）',
+  '後下巴': '後下巴（REAR PART）',
+  '側裙':   '側裙（SIDE PART）',
+  '其他':   '其他（OTHER）'
+};
+const PART_SHARED = ['側裙', OTHER];
+const PART_BY_CATEGORY = {
+  'Bumper': ['前保', '後保'],
+  'Mazda':  ['前下巴', '後下巴']
+};
+// 所有固定部件（不含「其他」），用來判斷記憶值是固定選項還是自訂名稱
+const PART_OPTIONS = [...PART_BY_CATEGORY.Bumper, ...PART_BY_CATEGORY.Mazda, '側裙'];
 
 const STATIONS = {
   '整修': { sheetName: '整修階段', label: '🏭 您目前是：整修組', cls: 'repair' },
@@ -585,6 +616,7 @@ function init() {
   const savedCat = recall(KEYS.modelCategory);
   // 舊版只存了車型沒有類別 → 依代號推回類別
   setModel(savedCat === OTHER || MODEL_CATEGORIES[savedCat] ? savedCat : categoryOf(model), model);
+  // 部件只在屬於該類別（或共用的側裙/其他）時帶出，否則留空
   setPart(recall(KEYS.part));
   ['worker', 'model', 'part-custom', 'color'].forEach(f => {
     el('input-' + f).addEventListener('input', onFieldInput);
@@ -622,16 +654,43 @@ function setModel(cat, model) {
 function onModelCategoryChange() {
   const cat = el('input-model-category').value;
   setModel(cat, '');   // 類別變動 → 清空車型
+  setPart('');         // 部件選項換成新類別的，原本選的清空（含記憶）
+  store(KEYS.part, '');
   if (cat === OTHER) el('input-model').focus();
   validateForm();
 }
 
+// 依目前車型類別產生部件下拉：Bumper/Mazda 各自部件 + 共用；「其他」類別用 optgroup 全部列出
+function renderPartOptions() {
+  const cat = el('input-model-category').value;
+  const opt = v => `<option value="${v}">${PART_LABELS[v]}</option>`;
+  const group = (label, list) => `<optgroup label="${label}">${list.map(opt).join('')}</optgroup>`;
+  const sel = el('input-part');
+  if (cat === OTHER) {
+    sel.innerHTML = '<option value="">— 請選擇 / Select —</option>' +
+      group('Bumper 部件', PART_BY_CATEGORY.Bumper) +
+      group('Mazda 部件', PART_BY_CATEGORY.Mazda) +
+      group('共用', PART_SHARED);
+  } else if (PART_BY_CATEGORY[cat]) {
+    sel.innerHTML = '<option value="">— 請選擇 / Select —</option>' +
+      [...PART_BY_CATEGORY[cat], ...PART_SHARED].map(opt).join('');
+  } else {
+    sel.innerHTML = '<option value="">— 請先選類別 / Select category first —</option>';
+  }
+  sel.disabled = !cat;
+}
+
 // 部件：固定選項直接選；其他值（自訂名稱）→ 選「其他」並帶入輸入框
+// 固定選項不屬於目前類別（例如 Mazda 時記憶是「前保」）→ 留空
 function setPart(value) {
+  renderPartOptions();
+  const sel = el('input-part');
   const fixed = PART_OPTIONS.includes(value);
-  el('input-part').value = fixed ? value : (value ? OTHER : '');
-  el('input-part-custom').value = fixed ? '' : value;
-  el('part-custom-wrap').hidden = el('input-part').value !== OTHER;
+  const want = fixed ? value : (value ? OTHER : '');
+  sel.value = want;
+  if (sel.value !== want) sel.value = '';
+  el('input-part-custom').value = sel.value === OTHER && !fixed ? value : '';
+  el('part-custom-wrap').hidden = sel.value !== OTHER;
 }
 
 function onPartChange() {
