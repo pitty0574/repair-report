@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>整修終檢日報</title>
+<title>打蠟整修終檢日報</title>
 <!--
-  repair-check.html — 整修組 + 終檢組手機輸入介面
+  repair-check.html — 打蠟整修組 + 終檢組手機輸入介面
   （補漆組繼續使用 repair-report.html）
 
   寫入方式：與 repair-report.html 相同的 Apps Script Web App（GET + no-cors），
@@ -449,7 +449,7 @@
 <body>
 
 <header>
-  <h1>整修 / 終檢日報 <span style="font-weight:400;opacity:0.7;font-size:12px;">Repair &amp; Final Check</span></h1>
+  <h1>打蠟整修 / 終檢日報 <span style="font-weight:400;opacity:0.7;font-size:12px;">Polishing &amp; Waxing / Final Check</span></h1>
   <p>補漆組請使用 repair-report.html</p>
 </header>
 
@@ -458,7 +458,7 @@
     <label for="input-station">工站別 / Station<span class="label-hint">切換請重選</span></label>
     <select id="input-station" onchange="onStationChange()">
       <option value="">— 請選擇 / Select —</option>
-      <option value="整修">整修 Repair</option>
+      <option value="整修">打蠟整修 Polishing and Waxing</option>
       <option value="終檢">終檢 Final Check</option>
     </select>
     <div class="station-banner" id="station-banner">請先選擇工站別 / Select station</div>
@@ -584,7 +584,7 @@ const PART_BY_CATEGORY = {
 const PART_OPTIONS = [...PART_BY_CATEGORY.Bumper, ...PART_BY_CATEGORY.Mazda, '側裙'];
 
 const STATIONS = {
-  '整修': { sheetName: '整修階段', label: '🏭 您目前是：整修組', cls: 'repair' },
+  '整修': { sheetName: '整修階段', label: '🏭 您目前是：打蠟整修組', cls: 'repair' },
   '終檢': { sheetName: '終檢階段', label: '🔍 您目前是：終檢組', cls: 'check' }
 };
 
@@ -876,7 +876,7 @@ function showResultModal(ok, rec) {
   card.className = 'result-card' + (ok ? '' : ' error');
   if (ok) {
     const info = STATIONS[rec.station];
-    const stationName = rec.station === '整修' ? '整修 Rework' : '終檢 Final Check';
+    const stationName = rec.station === '整修' ? '打蠟整修 Polishing and Waxing' : '終檢 Final Check';
     const row = (k, v, cls) => `<div><span class="k">${k}：</span><span class="v ${cls || ''}">${esc(v)}</span></div>`;
     card.innerHTML =
       '<div class="result-title">✅ 上傳完成 Uploaded</div>' +
